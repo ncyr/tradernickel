@@ -1,0 +1,27 @@
+{
+  "name": "tradernickel",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "next": "^15.1.7",
+    "nextjs": "^0.0.3",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-hook-form": "^7.54.2"
+  },
+  "devDependencies": {
+    "@types/axios": "^0.14.4",
+    "@types/next": "^9.0.0",
+    "@types/node": "^20.11.24",
+    "@types/react": "^18.2.61",
+    "@types/react-dom": "^18.2.19",
+    "typescript": "^5.3.3"
+  }
+}
