@@ -6,22 +6,32 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "clean": "rm -rf .next node_modules/.cache",
+    "test": "jest",
+    "test:e2e": "jest tests/e2e --forceExit"
   },
   "dependencies": {
-    "axios": "^1.7.9",
-    "next": "^15.1.7",
-    "nextjs": "^0.0.3",
-    "react": "latest",
-    "react-dom": "latest",
-    "react-hook-form": "^7.54.2"
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/icons-material": "^6.4.7",
+    "@mui/material": "^6.4.7",
+    "axios": "^1.6.7",
+    "critters": "^0.0.25",
+    "next": "14.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-hook-form": "^7.50.0"
   },
   "devDependencies": {
-    "@types/axios": "^0.14.4",
-    "@types/next": "^9.0.0",
-    "@types/node": "^20.11.24",
-    "@types/react": "^18.2.61",
+    "@types/jest": "^29.5.14",
+    "@types/node": "20.17.24",
+    "@types/puppeteer": "^7.0.4",
+    "@types/react": "18.3.18",
     "@types/react-dom": "^18.2.19",
-    "typescript": "^5.3.3"
+    "jest": "^29.7.0",
+    "puppeteer": "^22.15.0",
+    "ts-jest": "^29.2.6",
+    "typescript": "5.8.2"
   }
 }

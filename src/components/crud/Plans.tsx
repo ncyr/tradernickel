@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { planService } from '@/services/api/plans';
-import type { Plan, CreatePlanDTO, UpdatePlanDTO } from '@/types/plan';
+import type { Plan, CreatePlanDTO, UpdatePlanDTO } from '@/services/api/plans';
 
 export const Plans: React.FC = () => {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<CreatePlanDTO>();
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<CreatePlanDTO & UpdatePlanDTO>();
 
   const fetchPlans = async () => {
     try {
@@ -26,11 +26,15 @@ export const Plans: React.FC = () => {
     fetchPlans();
   }, []);
 
-  const onSubmit = async (data: CreatePlanDTO) => {
+  const onSubmit = async (data: CreatePlanDTO & UpdatePlanDTO) => {
     try {
       setIsLoading(true);
       if (isEditing && selectedPlan) {
-        await planService.updatePlan(selectedPlan.id, data);
+        const updateData: UpdatePlanDTO = {
+          ...data,
+          active: data.active ?? selectedPlan.active
+        };
+        await planService.updatePlan(selectedPlan.id, updateData);
       } else {
         await planService.createPlan(data);
       }
@@ -127,7 +131,7 @@ export const Plans: React.FC = () => {
           </label>
           <input
             type="datetime-local"
-            {...register('expiration', { required: 'Expiration is required' })}
+            {...register('expiration')}
             className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
           />
           {errors.expiration && <p className="text-red-500 text-xs italic">{errors.expiration.message}</p>}
@@ -209,7 +213,7 @@ export const Plans: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap">{plan.only_action}</td>
                   <td className="px-6 py-4 whitespace-nowrap">{plan.active ? 'Yes' : 'No'}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {new Date(plan.expiration).toLocaleDateString()}
+                    {plan.expiration ? new Date(plan.expiration).toLocaleDateString() : 'No expiration'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <button
