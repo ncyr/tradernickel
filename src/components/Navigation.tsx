@@ -37,6 +37,7 @@ import {
   Logout as LogoutIcon,
   ChevronLeft as ChevronLeftIcon,
   DarkMode as DarkModeIcon,
+  Key as KeyIcon,
 } from '@mui/icons-material';
 
 interface NavigationProps {
@@ -75,15 +76,13 @@ const Navigation = ({ variant }: NavigationProps) => {
     return null;
   }
 
-  const menuItems = [
-    { href: '/dashboard', label: 'Dashboard', icon: <DashboardIcon /> },
-    { href: '/bots', label: 'Bots', icon: <BotIcon /> },
-    { href: '/plans', label: 'Plans', icon: <SettingsIcon /> },
-    { href: '/bot-plans', label: 'Bot Plans', icon: <BotIcon /> },
-    { href: '/schedules', label: 'Schedules', icon: <ScheduleIcon /> },
-    { href: '/brokers', label: 'Brokers', icon: <SettingsIcon /> },
-    { href: '/trading/logs', label: 'Trade Logs', icon: <ScheduleIcon /> },
-    { href: '/support', label: 'Support', icon: <SupportIcon /> },
+  const navigationItems = [
+    { path: '/dashboard', icon: <DashboardIcon />, label: 'Dashboard' },
+    { path: '/dashboard/bots', icon: <BotIcon />, label: 'Bots' },
+    { path: '/dashboard/schedules', icon: <ScheduleIcon />, label: 'Schedules' },
+    { path: '/dashboard/user-brokers', icon: <KeyIcon />, label: 'Broker Keys' },
+    { path: '/dashboard/settings', icon: <SettingsIcon />, label: 'Settings' },
+    { path: '/dashboard/support', icon: <SupportIcon />, label: 'Support' },
   ];
 
   const userMenuItems = [
@@ -117,12 +116,12 @@ const Navigation = ({ variant }: NavigationProps) => {
       })
     }}>
       <List>
-        {menuItems.map((item) => (
-          <ListItem key={item.href} disablePadding>
+        {navigationItems.map((item) => (
+          <ListItem key={item.path} disablePadding>
             <ListItemButton
               component={Link}
-              href={item.href}
-              selected={pathname === item.href}
+              href={item.path}
+              selected={pathname === item.path}
               sx={{
                 py: 1.5,
                 '&.Mui-selected': {
