@@ -78,8 +78,8 @@ export default function ForgotPasswordPage() {
     <div className="fade-in">
       <PageHeader
         title="Forgot Password"
-        description="Enter your email address to reset your password"
-        actions={
+        subtitle="Enter your email address to reset your password"
+        action={
           <Button
             variant="outlined"
             startIcon={<ArrowBackIcon />}

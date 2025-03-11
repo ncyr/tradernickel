@@ -50,13 +50,28 @@ const BrokersPage = () => {
         setIsAdmin(user.role === 'admin');
 
         if (user.role === 'admin') {
-          const data = await brokerService.getBrokers();
+          const token = localStorage.getItem('token');
+          if (!token) {
+            throw new Error('Not authenticated');
+          }
+
+          const response = await fetch('/api/brokers', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+          
+          if (!response.ok) {
+            throw new Error('Failed to load brokers');
+          }
+          const data = await response.json();
           setBrokers(data);
         } else {
           setError('Only administrators can access broker management');
         }
       } catch (err: any) {
-        setError(err.response?.data?.error || 'Failed to load brokers');
+        console.error('Error loading brokers:', err);
+        setError(err.message || 'Failed to load brokers');
       } finally {
         setLoading(false);
       }
@@ -78,7 +93,7 @@ const BrokersPage = () => {
       <Box sx={{ py: 4 }}>
         <PageHeader
           title="Broker Management"
-          description="Manage trading brokers"
+          subtitle="Manage trading brokers"
         />
         <Alert severity="error" sx={{ mt: 2 }}>
           {error}
@@ -91,15 +106,14 @@ const BrokersPage = () => {
     <div className="fade-in">
       <PageHeader
         title="Broker Management"
-        description="Manage trading brokers and their configurations"
-        actions={
+        subtitle="Manage trading brokers"
+        action={
           isAdmin && (
             <Button
               variant="contained"
               color="primary"
               startIcon={<AddIcon />}
-              component={Link}
-              href="/brokers/new"
+              onClick={() => router.push('/brokers/new')}
             >
               Add Broker
             </Button>

@@ -80,23 +80,16 @@ const BotsPage = () => {
     <div className="fade-in">
       <PageHeader
         title="Trading Bots"
-        description="Manage your automated trading bots"
-        actions={
+        subtitle="Manage your automated trading bots"
+        action={
           <>
             <Button
-              variant="outlined"
-              startIcon={<RefreshIcon />}
-              onClick={handleRefresh}
-              disabled={refreshing}
-            >
-              {refreshing ? 'Refreshing...' : 'Refresh'}
-            </Button>
-            <Button
               variant="contained"
+              color="primary"
               startIcon={<AddIcon />}
               onClick={() => router.push('/bots/new')}
             >
-              New Bot
+              Add Bot
             </Button>
           </>
         }

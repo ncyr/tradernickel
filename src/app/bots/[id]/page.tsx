@@ -29,13 +29,12 @@ import PageHeader from '@/components/PageHeader';
 import FormInput from '@/components/FormInput';
 import { useFormValidation, commonValidationRules } from '@/hooks/useFormValidation';
 import { authService } from '@/services/api/auth';
-import { botService } from '@/services/api/bots';
+import { botService, Region, Provider } from '@/services/api/bots';
+import { toast } from 'react-hot-toast';
 
 interface FormValues {
   name: string;
   description: string;
-  region: string;
-  provider: string;
   broker_id: string;
   active: boolean;
   copy_active: boolean;
@@ -57,8 +56,6 @@ const BotDetailPage = () => {
   const initialValues: FormValues = {
     name: '',
     description: '',
-    region: 'us-east-1',
-    provider: 'aws',
     broker_id: '',
     active: true,
     copy_active: false,
@@ -72,12 +69,6 @@ const BotDetailPage = () => {
     ],
     description: [
       commonValidationRules.required('Description is required'),
-    ],
-    region: [
-      commonValidationRules.required('Region is required'),
-    ],
-    provider: [
-      commonValidationRules.required('Provider is required'),
     ],
     broker_id: [
       commonValidationRules.required('Broker is required'),
@@ -107,101 +98,134 @@ const BotDetailPage = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const user = await authService.getCurrentUser();
-        if (!user) {
+        setLoading(true);
+        
+        // Get auth token
+        const token = localStorage.getItem('token');
+        if (!token) {
           router.push('/login');
           return;
         }
 
-        // Load brokers
-        const brokersResponse = await fetch('/api/brokers').then(res => {
-          if (!res.ok) throw new Error('Failed to load brokers');
-          return res.json();
-        }).catch(() => {
-          // If we can't load brokers, use a mock list
-          return [
-            { id: 1, name: 'Tradovate' },
-            { id: 2, name: 'Interactive Brokers' },
-            { id: 3, name: 'TD Ameritrade' },
-          ];
-        });
+        // Load all data in parallel with proper auth headers
+        const [botData, brokersResponse] = await Promise.all([
+          id !== 'new' ? botService.getBot(id) : null,
+          fetch('/api/brokers', {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          }),
+        ]);
 
-        setBrokers(brokersResponse);
-
-        // If editing existing bot, load it
-        if (!isNew) {
-          try {
-            const bot = await botService.getBot(parseInt(id));
-            setValues({
-              name: bot.name,
-              description: bot.description || '',
-              region: bot.region,
-              provider: bot.provider,
-              broker_id: bot.broker_id.toString(),
-              active: bot.active,
-              copy_active: bot.copy_active,
-              metadata: bot.metadata ? JSON.stringify(bot.metadata, null, 2) : '{}',
-            });
-          } catch (err) {
-            console.error("Error loading bot:", err);
-            setError("Failed to load bot data");
-          }
+        // Handle brokers response
+        if (!brokersResponse.ok) {
+          throw new Error(`Failed to load brokers: ${brokersResponse.statusText}`);
+        }
+        const brokersData = await brokersResponse.json();
+        if (!Array.isArray(brokersData)) {
+          throw new Error('Invalid brokers data format');
         }
 
-        setLoading(false);
+        if (botData) {
+          setValues({
+            name: botData.name,
+            description: botData.description || '',
+            broker_id: botData.broker_id.toString(),
+            active: botData.active,
+            copy_active: botData.copy_active,
+            metadata: botData.metadata ? JSON.stringify(botData.metadata, null, 2) : '{}',
+          });
+        }
+
+        setBrokers(brokersData);
+        setError(null);
       } catch (err: any) {
-        setError(err.response?.data?.error || 'Failed to load data');
+        console.error('Error loading data:', err);
+        setError(err.response?.data?.error || err.message || 'Failed to load data');
+      } finally {
         setLoading(false);
       }
     };
 
     loadData();
-  }, [id, isNew, router, setValues]);
+  }, [id, setValues, router]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    if (!validateForm()) {
-      return;
-    }
-
-    setSubmitting(true);
-
+  const handleSubmit = async (data: FormValues) => {
     try {
-      const botData = {
-        name: values.name,
-        description: values.description,
-        region: values.region,
-        provider: values.provider,
-        broker_id: parseInt(values.broker_id),
-        active: values.active,
-        copy_active: values.copy_active,
-        metadata: values.metadata ? JSON.parse(values.metadata) : {},
-      };
-
-      if (isNew) {
-        await botService.createBot(botData);
-      } else {
-        await botService.updateBot(parseInt(id), botData);
+      setSubmitting(true);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
       }
 
-      router.push('/bots');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to save bot');
+      // Set auth header
+      botService.setAuthHeader(`Bearer ${token}`);
+
+      // Format the data
+      const formattedData = {
+        name: data.name,
+        description: data.description,
+        broker_id: parseInt(data.broker_id),
+        active: data.active,
+        copy_active: data.copy_active,
+        metadata: data.metadata ? JSON.parse(data.metadata) : {},
+      };
+
+      console.log('Submitting bot data:', {
+        id,
+        isNew: id === 'new',
+        formattedData,
+        token: token.substring(0, 10) + '...'
+      });
+
+      let savedBot;
+      if (id === 'new') {
+        savedBot = await botService.createBot(formattedData);
+      } else {
+        savedBot = await botService.updateBot(id, formattedData);
+      }
+
+      console.log('Bot saved successfully:', savedBot);
+
+      toast.success('Bot saved successfully');
+      if (id === 'new') {
+        router.push(`/bots/${savedBot.id}`);
+      }
+    } catch (error: any) {
+      console.error('Error saving bot:', {
+        error,
+        response: error.response,
+        message: error.message,
+        stack: error.stack
+      });
+      toast.error(error.response?.data?.error || error.message || 'Failed to save bot');
+    } finally {
       setSubmitting(false);
     }
   };
 
   const handleDelete = async () => {
-    setDeleteDialogOpen(false);
-    setSubmitting(true);
+    if (!window.confirm('Are you sure you want to delete this bot?')) {
+      return;
+    }
 
     try {
-      await botService.deleteBot(parseInt(id));
+      setSubmitting(true);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      // Set auth header
+      botService.setAuthHeader(`Bearer ${token}`);
+
+      await botService.deleteBot(id);
+      toast.success('Bot deleted successfully');
       router.push('/bots');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to delete bot');
+    } catch (error: any) {
+      console.error('Error deleting bot:', error);
+      toast.error(error.response?.data?.error || error.message || 'Failed to delete bot');
+    } finally {
       setSubmitting(false);
     }
   };
@@ -222,17 +246,37 @@ const BotDetailPage = () => {
     <div className="fade-in">
       <PageHeader
         title={isNew ? 'Create Bot' : 'Edit Bot'}
-        description={isNew 
+        subtitle={isNew 
           ? 'Create a new trading bot' 
           : 'Modify your existing trading bot'}
-        actions={
-          <Button
-            variant="outlined"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => router.push('/bots')}
-          >
-            Back to Bots
-          </Button>
+        action={
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              variant="outlined"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => router.back()}
+            >
+              Back
+            </Button>
+            {!isNew && (
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<DeleteIcon />}
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                Delete
+              </Button>
+            )}
+            <Button
+              variant="contained"
+              startIcon={<SaveIcon />}
+              onClick={() => handleSubmit(values)}
+              disabled={submitting}
+            >
+              {submitting ? 'Saving...' : 'Save'}
+            </Button>
+          </Box>
         }
       />
 
@@ -244,7 +288,12 @@ const BotDetailPage = () => {
 
       <Card sx={{ mb: 4 }}>
         <CardContent sx={{ p: 4 }}>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            if (validateForm()) {
+              handleSubmit(values);
+            }
+          }}>
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
                 <FormInput
@@ -271,13 +320,14 @@ const BotDetailPage = () => {
                   errors={errors.broker_id || []}
                   touched={touched.broker_id}
                   fullWidth
+                  helperText="Select the broker to use for this bot"
                 >
                   <MenuItem value="" disabled>
                     Select a broker
                   </MenuItem>
                   {brokers.map((broker) => (
                     <MenuItem key={broker.id} value={broker.id.toString()}>
-                      {broker.name}
+                      {broker.name} {broker.active ? '(Active)' : '(Inactive)'}
                     </MenuItem>
                   ))}
                 </FormInput>
@@ -297,48 +347,6 @@ const BotDetailPage = () => {
                   rows={2}
                   placeholder="Describe your trading bot's purpose"
                 />
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <FormInput
-                  select
-                  label="Region"
-                  name="region"
-                  value={values.region}
-                  onChange={(e) => handleChange('region', e.target.value)}
-                  onBlur={() => handleBlur('region')}
-                  errors={errors.region || []}
-                  touched={touched.region}
-                  fullWidth
-                >
-                  <MenuItem value="us-east-1">US East (N. Virginia)</MenuItem>
-                  <MenuItem value="us-east-2">US East (Ohio)</MenuItem>
-                  <MenuItem value="us-west-1">US West (N. California)</MenuItem>
-                  <MenuItem value="us-west-2">US West (Oregon)</MenuItem>
-                  <MenuItem value="eu-west-1">EU (Ireland)</MenuItem>
-                  <MenuItem value="eu-central-1">EU (Frankfurt)</MenuItem>
-                  <MenuItem value="ap-northeast-1">Asia Pacific (Tokyo)</MenuItem>
-                  <MenuItem value="ap-southeast-1">Asia Pacific (Singapore)</MenuItem>
-                </FormInput>
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <FormInput
-                  select
-                  label="Provider"
-                  name="provider"
-                  value={values.provider}
-                  onChange={(e) => handleChange('provider', e.target.value)}
-                  onBlur={() => handleBlur('provider')}
-                  errors={errors.provider || []}
-                  touched={touched.provider}
-                  fullWidth
-                >
-                  <MenuItem value="aws">Amazon Web Services</MenuItem>
-                  <MenuItem value="gcp">Google Cloud Platform</MenuItem>
-                  <MenuItem value="azure">Microsoft Azure</MenuItem>
-                  <MenuItem value="local">Local (Self-hosted)</MenuItem>
-                </FormInput>
               </Grid>
 
               <Grid item xs={12}>

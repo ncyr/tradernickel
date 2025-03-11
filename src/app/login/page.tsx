@@ -1,85 +1,123 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { Button, Card, CardContent, Grid, Box, Typography, CircularProgress, Alert } from '@mui/material';
 import Link from 'next/link';
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Grid,
-  Typography,
-  Alert,
-  CircularProgress,
-} from '@mui/material';
-import {
-  Login as LoginIcon,
-  PersonAdd as PersonAddIcon,
-} from '@mui/icons-material';
-import PageHeader from '@/components/PageHeader';
-import FormInput from '@/components/FormInput';
+import LoginIcon from '@mui/icons-material/Login';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import { useFormValidation, commonValidationRules } from '@/hooks/useFormValidation';
+import FormInput from '@/components/FormInput';
+import PageHeader from '@/components/PageHeader';
 import { authService } from '@/services/api/auth';
+import { useUser } from '@/components/UserProvider';
 
 interface FormValues {
   username: string;
   password: string;
 }
 
-export default function LoginPage() {
+const initialValues: FormValues = {
+  username: '',
+  password: '',
+};
+
+const validationRules = {
+  username: [
+    commonValidationRules.required('Username is required'),
+  ],
+  password: [
+    commonValidationRules.required('Password is required'),
+  ],
+};
+
+function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { setUser } = useUser();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const initialValues: FormValues = {
-    username: '',
-    password: '',
-  };
-
-  const validationRules = {
-    username: [
-      commonValidationRules.required('Username is required'),
-    ],
-    password: [
-      commonValidationRules.required('Password is required'),
-    ],
-  };
-
-  const { values, errors, touched, handleChange, handleBlur, validateForm } = useFormValidation(
+  const { values, errors, touched, handleChange, handleBlur, validateForm } = useFormValidation<FormValues>(
     initialValues,
     validationRules
   );
 
   useEffect(() => {
+    // Log environment variables for debugging
+    console.log('Environment:', {
+      NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+      NODE_ENV: process.env.NODE_ENV,
+    });
+
     // Check for registration success message
-    const registered = searchParams.get('registered');
+    const registered = searchParams?.get('registered');
     if (registered === 'true') {
       setSuccess('Account created successfully! You can now log in.');
     }
+    
+    // Check for password reset success message
+    const resetSuccess = searchParams?.get('reset');
+    if (resetSuccess === 'true') {
+      setSuccess('Password reset successfully! You can now log in.');
+    }
   }, [searchParams]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
+    console.log('Form submitted');
 
     if (!validateForm()) {
+      console.log('Form validation failed:', errors);
       return;
     }
 
     setSubmitting(true);
-    console.log('Submitting login form with username:', values.username);
+    console.log('Attempting login with:', { username: values.username });
 
     try {
-      console.log('Attempting to login with credentials:', { username: values.username });
+      console.log('Calling authService.login...');
       const response = await authService.login({
         username: values.username,
         password: values.password,
       });
-      console.log('Login successful, response:', response);
-      router.push('/dashboard');
+      console.log('Login successful:', { 
+        hasToken: !!response.token,
+        hasUser: !!response.user,
+        expiresAt: response.expiresAt
+      });
+      
+      // Update the user context
+      setUser(response.user);
+      console.log('User context updated');
+      
+      // Wait for cookie and localStorage to be set
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Verify cookie is set
+      if (!document.cookie.includes('token=')) {
+        console.error('Cookie not set after login');
+        setError('Failed to set authentication cookie. Please try again.');
+        setSubmitting(false);
+        return;
+      }
+      
+      // Verify localStorage is set
+      const storedToken = localStorage.getItem('token');
+      const storedUser = localStorage.getItem('user');
+      if (!storedToken || !storedUser) {
+        console.error('Token or user not stored in localStorage after login');
+        setError('Failed to store authentication data. Please try again.');
+        setSubmitting(false);
+        return;
+      }
+
+      // Use window.location.href for a full page reload
+      console.log('All checks passed, redirecting to dashboard...');
+      window.location.href = '/dashboard';
     } catch (err: any) {
       console.error('Login error:', err);
       console.error('Error details:', {
@@ -88,7 +126,7 @@ export default function LoginPage() {
         status: err.response?.status,
         data: err.response?.data,
       });
-      setError(err.response?.data?.error || 'Login failed. Please check your credentials.');
+      setError(err.response?.data?.error || err.message || 'Login failed. Please check your credentials.');
       setSubmitting(false);
     }
   };
@@ -97,8 +135,8 @@ export default function LoginPage() {
     <div className="fade-in">
       <PageHeader
         title="Login"
-        description="Sign in to your Trader Nickel account"
-        actions={
+        subtitle="Sign in to your Trader Nickel account"
+        action={
           <Button
             variant="contained"
             color="primary"
@@ -131,7 +169,7 @@ export default function LoginPage() {
                   label="Username"
                   name="username"
                   value={values.username}
-                  onChange={(e) => handleChange('username', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('username', e.target.value)}
                   onBlur={() => handleBlur('username')}
                   errors={errors.username || []}
                   touched={touched.username}
@@ -148,7 +186,7 @@ export default function LoginPage() {
                   type="password"
                   showPasswordToggle
                   value={values.password}
-                  onChange={(e) => handleChange('password', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('password', e.target.value)}
                   onBlur={() => handleBlur('password')}
                   errors={errors.password || []}
                   touched={touched.password}
@@ -199,5 +237,13 @@ export default function LoginPage() {
         </Typography>
       </Box>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>}>
+      <LoginContent />
+    </Suspense>
   );
 } 

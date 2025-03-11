@@ -1,9 +1,8 @@
 'use client';
 
 import React from 'react';
-import { ThemeProvider } from '@mui/material/styles';
+import { ThemeProvider } from '../contexts/ThemeContext';
 import CssBaseline from '@mui/material/CssBaseline';
-import theme from '../styles/theme';
 
 interface ThemeRegistryProps {
   children: React.ReactNode;
@@ -11,7 +10,7 @@ interface ThemeRegistryProps {
 
 const ThemeRegistry: React.FC<ThemeRegistryProps> = ({ children }) => {
   return (
-    <ThemeProvider theme={theme}>
+    <ThemeProvider>
       <CssBaseline />
       {children}
     </ThemeProvider>

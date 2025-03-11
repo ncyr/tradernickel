@@ -4,7 +4,8 @@ import { AppBar, Box, Container, Toolbar } from '@mui/material'
 import ThemeRegistry from '../components/ThemeRegistry'
 import Logo from '../components/Logo'
 import Navigation from '../components/Navigation'
-import AuthProvider from '../components/AuthProvider'
+import Providers from '../components/Providers'
+import UserProvider from '../components/UserProvider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -30,60 +31,56 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <ThemeRegistry>
-          <AuthProvider>
-            <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-              <AppBar 
-                position="sticky" 
-                elevation={0}
-                sx={{
-                  backgroundColor: 'background.paper',
-                  borderBottom: '1px solid',
-                  borderColor: 'divider',
-                }}
-              >
-                <Container maxWidth="xl">
-                  <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 0 } }}>
-                    <Logo size="medium" />
-                    <Navigation />
-                  </Toolbar>
-                </Container>
-              </AppBar>
-              <Box
-                component="main"
-                sx={{
-                  flex: 1,
-                  py: 4,
-                  backgroundColor: 'background.default',
-                }}
-              >
-                <Container maxWidth="xl">
-                  {children}
-                </Container>
-              </Box>
-              <Box
-                component="footer"
-                sx={{
-                  py: 3,
-                  px: 2,
-                  mt: 'auto',
-                  backgroundColor: 'background.paper',
-                  borderTop: '1px solid',
-                  borderColor: 'divider',
-                }}
-              >
-                <Container maxWidth="xl">
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Logo size="small" />
-                    <Box sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
-                      © {new Date().getFullYear()} Trader Nickel. All rights reserved.
-                    </Box>
+          <UserProvider>
+            <Providers>
+              <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                  <AppBar 
+                    position="static" 
+                    elevation={0}
+                    sx={{ 
+                      zIndex: 2,
+                      bgcolor: 'background.paper',
+                      borderBottom: 1,
+                      borderColor: 'divider',
+                    }}
+                  >
+                    <Container maxWidth={false}>
+                      <Toolbar 
+                        disableGutters 
+                        sx={{ 
+                          minHeight: { xs: 56, sm: 64 },
+                          gap: 2,
+                          px: { xs: 1, sm: 2 },
+                        }}
+                      >
+                        <Logo />
+                        <Box sx={{ flexGrow: 1 }} />
+                        <Navigation variant="user-menu" />
+                      </Toolbar>
+                    </Container>
+                  </AppBar>
+                  <Box sx={{ display: 'flex', flexGrow: 1 }}>
+                    <Navigation variant="sidebar" />
+                    <Container 
+                      component="main" 
+                      maxWidth={false} 
+                      sx={{ 
+                        flexGrow: 1,
+                        py: 3,
+                        px: { xs: 2, sm: 3 },
+                        bgcolor: 'background.default',
+                      }}
+                    >
+                      {children}
+                    </Container>
                   </Box>
-                </Container>
+                </Box>
               </Box>
-            </Box>
-          </AuthProvider>
+            </Providers>
+          </UserProvider>
         </ThemeRegistry>
       </body>
     </html>
-  )
+  );
 } 

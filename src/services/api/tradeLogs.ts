@@ -74,28 +74,32 @@ export interface TradeLogStats {
 }
 
 export const tradeLogService = {
+  setAuthHeader: (authHeader: string) => {
+    api.defaults.headers.common.Authorization = authHeader;
+  },
+
   createTradeLog: async (data: CreateTradeLogDTO): Promise<TradeLog> => {
-    const response = await api.post('/trade-logs', data);
+    const response = await api.post('/v1/trade-logs', data);
     return response.data;
   },
 
   getTradeLogsByUser: async (filters: TradeLogFilters = {}): Promise<PaginatedTradeLogResponse> => {
-    const response = await api.get('/trade-logs', { params: filters });
+    const response = await api.get('/v1/trade-logs', { params: filters });
     return response.data;
   },
 
   getTradeLogById: async (id: number): Promise<TradeLog> => {
-    const response = await api.get(`/trade-logs/${id}`);
+    const response = await api.get(`/v1/trade-logs/${id}`);
     return response.data;
   },
 
   updateTradeLog: async (id: number, data: UpdateTradeLogDTO): Promise<TradeLog> => {
-    const response = await api.patch(`/trade-logs/${id}`, data);
+    const response = await api.patch(`/v1/trade-logs/${id}`, data);
     return response.data;
   },
 
   deleteTradeLog: async (id: number): Promise<void> => {
-    await api.delete(`/trade-logs/${id}`);
+    await api.delete(`/v1/trade-logs/${id}`);
   },
 
   getTradeLogStats: async (filters: {
@@ -103,7 +107,7 @@ export const tradeLogService = {
     end_date?: string;
     bot_name?: string;
   } = {}): Promise<TradeLogStats> => {
-    const response = await api.get('/trade-logs/stats/summary', { params: filters });
+    const response = await api.get('/v1/trade-logs/stats/summary', { params: filters });
     return response.data;
   }
 };

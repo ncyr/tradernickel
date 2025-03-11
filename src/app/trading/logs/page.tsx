@@ -4,6 +4,43 @@ import { useState, useEffect } from 'react';
 import { tradeLogService, TradeLog, TradeLogFilters, TradeLogStats } from '@/services/api/tradeLogs';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import {
+  Box,
+  Container,
+  Typography,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TablePagination,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Grid,
+  Chip,
+  IconButton,
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Alert,
+} from '@mui/material';
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
+import { format } from 'date-fns';
+import { FilterList, Add, Edit, Delete } from '@mui/icons-material';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { api } from '@/services/api';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 
 interface PaginationState {
   page: number;
@@ -25,6 +62,23 @@ const defaultFilters: TradeLogFilters = {
   sort_order: 'desc'
 };
 
+// Validation schema for trade log form
+const tradeLogSchema = z.object({
+  trade_type: z.enum(['buy', 'sell', 'limit_buy', 'limit_sell', 'market_buy', 'market_sell']),
+  symbol: z.string().min(1, 'Symbol is required').max(20),
+  quantity: z.number().min(0, 'Quantity must be positive'),
+  price: z.number().min(0, 'Price must be positive'),
+  total_value: z.number().min(0, 'Total value must be positive'),
+  status: z.enum(['success', 'failed', 'pending']),
+  exchange: z.string().optional().transform(val => val || null),
+  order_id: z.string().optional().transform(val => val || null),
+  bot_name: z.string().optional().transform(val => val || null),
+  error_message: z.string().optional().transform(val => val || null),
+  metadata: z.any().nullable(),
+});
+
+type TradeLogFormData = z.infer<typeof tradeLogSchema>;
+
 export default function TradeLogsPage() {
   const router = useRouter();
   
@@ -43,15 +97,57 @@ export default function TradeLogsPage() {
   const [stats, setStats] = useState<TradeLogStats | null>(null);
   const [showStats, setShowStats] = useState(false);
 
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<TradeLogFormData>({
+    resolver: zodResolver(tradeLogSchema),
+    defaultValues: {
+      trade_type: 'market_buy',
+      status: 'pending',
+      exchange: null,
+      order_id: null,
+      bot_name: null,
+      error_message: null,
+      metadata: null,
+    },
+  });
+
   const fetchTradeLogs = async () => {
     try {
       setLoading(true);
-      const response = await tradeLogService.getTradeLogsByUser(filters);
-      setTradeLogs(response.tradeLogs);
-      setPagination(response.pagination);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
+      const searchParams = new URLSearchParams();
+      Object.entries(filters).forEach(([key, val]) => {
+        if (val !== undefined && val !== '') {
+          searchParams.set(key, val.toString());
+        }
+      });
+
+      const response = await fetch(`/api/trade-logs?${searchParams.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setTradeLogs(data.tradeLogs);
+      setPagination(data.pagination);
       setError(null);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to load trade logs');
+      console.error('Error loading trade logs:', err);
+      setError(err.message || 'Failed to load trade logs');
     } finally {
       setLoading(false);
     }
@@ -59,8 +155,29 @@ export default function TradeLogsPage() {
 
   const fetchStats = async () => {
     try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
       const { start_date, end_date, bot_name } = filters;
-      const stats = await tradeLogService.getTradeLogStats({ start_date, end_date, bot_name });
+      const searchParams = new URLSearchParams();
+      if (start_date) searchParams.set('start_date', start_date);
+      if (end_date) searchParams.set('end_date', end_date);
+      if (bot_name) searchParams.set('bot_name', bot_name);
+
+      const response = await fetch(`/api/trade-logs/stats/summary?${searchParams.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const stats = await response.json();
       setStats(stats);
     } catch (err: any) {
       console.error('Failed to load stats:', err);
@@ -93,10 +210,10 @@ export default function TradeLogsPage() {
     }
   }, [filters, showStats]);
 
-  const handleFilterChange = (name: string, value: string | number) => {
+  const handleFilterChange = (name: string, value: string | number | Date | null) => {
     const newFilters: TradeLogFilters = {
       ...filters,
-      [name]: value,
+      [name]: value instanceof Date ? value.toISOString() : value,
       // Reset to page 1 when changing filters, ensure page is always a number
       page: name === 'page' ? Number(value) : 1
     };
@@ -133,335 +250,462 @@ export default function TradeLogsPage() {
     }
   };
 
+  const [openDialog, setOpenDialog] = useState(false);
+  const [selectedLog, setSelectedLog] = useState<TradeLog | null>(null);
+  const [bots, setBots] = useState<any[]>([]);
+
+  const fetchBots = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
+      const response = await fetch('/api/bots', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch bots');
+      }
+
+      const data = await response.json();
+      setBots(data);
+    } catch (error) {
+      console.error('Error fetching bots:', error);
+    }
+  };
+
+  const onSubmit = async (formData: TradeLogFormData) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
+      const data = {
+        ...formData,
+        total_value: formData.total_value || formData.quantity * formData.price,
+      };
+
+      const response = await fetch(`/api/trade-logs${selectedLog ? `/${selectedLog.id}` : ''}`, {
+        method: selectedLog ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save trade log');
+      }
+
+      setOpenDialog(false);
+      fetchTradeLogs();
+      reset();
+    } catch (error) {
+      console.error('Error saving trade log:', error);
+      setError('Failed to save trade log');
+    }
+  };
+
+  const handleEdit = (log: TradeLog) => {
+    setSelectedLog(log);
+    reset({
+      trade_type: log.trade_type as 'buy' | 'sell' | 'limit_buy' | 'limit_sell' | 'market_buy' | 'market_sell',
+      symbol: log.symbol,
+      quantity: log.quantity,
+      price: log.price,
+      total_value: log.total_value,
+      status: log.status as 'success' | 'failed' | 'pending',
+      exchange: log.exchange,
+      order_id: log.order_id,
+      bot_name: log.bot_name,
+      error_message: log.error_message,
+      metadata: log.metadata,
+    });
+    setOpenDialog(true);
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!window.confirm('Are you sure you want to delete this trade log?')) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
+      const response = await fetch(`/api/trade-logs/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete trade log');
+      }
+
+      fetchTradeLogs();
+    } catch (error) {
+      console.error('Error deleting trade log:', error);
+      setError('Failed to delete trade log');
+    }
+  };
+
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Bot Trade Logs</h1>
-        <Link href="/trading" className="text-blue-500 hover:text-blue-700">
-          Back to Trading
-        </Link>
-      </div>
+    <LocalizationProvider dateAdapter={AdapterDateFns}>
+      <Container maxWidth="xl">
+        <Box sx={{ py: 4 }}>
+          <Typography variant="h4" gutterBottom>
+            Trading Logs
+          </Typography>
 
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
-        </div>
-      )}
+        {error && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+            {error}
+            </Alert>
+          )}
 
-      <div className="mb-6">
-        <button
-          onClick={() => setShowStats(!showStats)}
-          className="mb-4 bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
-        >
-          {showStats ? 'Hide Statistics' : 'Show Statistics'}
-        </button>
+          <Paper sx={{ p: 2, mb: 2 }}>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} sm={6} md={3}>
+                <FormControl fullWidth>
+                  <InputLabel>Bot</InputLabel>
+                  <Select
+                    value={filters.bot_name || ''}
+                    onChange={(e) => handleFilterChange('bot_name', e.target.value)}
+                    label="Bot"
+                  >
+                    <MenuItem value="">All</MenuItem>
+                    {bots.map(bot => (
+                      <MenuItem key={bot.id} value={bot.name}>
+                        {bot.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <TextField
+                  fullWidth
+                  label="Symbol"
+                value={filters.symbol || ''}
+                onChange={(e) => handleFilterChange('symbol', e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <FormControl fullWidth>
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                value={filters.status || ''}
+                onChange={(e) => handleFilterChange('status', e.target.value)}
+                    label="Status"
+                  >
+                    <MenuItem value="">All</MenuItem>
+                    <MenuItem value="success">Success</MenuItem>
+                    <MenuItem value="failed">Failed</MenuItem>
+                    <MenuItem value="pending">Pending</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <DateTimePicker
+                  label="Start Date"
+                  value={filters.start_date ? new Date(filters.start_date) : null}
+                  onChange={(date) => handleFilterChange('start_date', date)}
+                  slotProps={{
+                    textField: {
+                      fullWidth: true,
+                    },
+                  }}
+                />
+              </Grid>
+            </Grid>
+          </Paper>
 
-        {showStats && stats && (
-          <div className="bg-white shadow-md rounded p-6 mb-6">
-            <h2 className="text-xl font-bold mb-4">Trade Statistics</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-              <div className="bg-gray-50 p-4 rounded border">
-                <h3 className="text-lg font-semibold mb-2">By Status</h3>
-                <div className="space-y-2">
-                  {stats.status_counts.map((item) => (
-                    <div key={item.status} className="flex justify-between">
-                      <span className={`px-2 py-1 rounded ${getStatusColor(item.status)}`}>
-                        {item.status}
-                      </span>
-                      <span className="font-bold">{item.count}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="bg-gray-50 p-4 rounded border">
-                <h3 className="text-lg font-semibold mb-2">By Type</h3>
-                <div className="space-y-2">
-                  {stats.type_counts.map((item) => (
-                    <div key={item.trade_type} className="flex justify-between">
-                      <span>{item.trade_type}</span>
-                      <span className="font-bold">{item.count}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="bg-gray-50 p-4 rounded border">
-                <h3 className="text-lg font-semibold mb-2">Total Values</h3>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span>Total Buy:</span>
-                    <span className="font-bold">
-                      {stats.total_values.total_buy_value 
-                        ? formatCurrency(parseFloat(stats.total_values.total_buy_value)) 
-                        : '$0.00'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Total Sell:</span>
-                    <span className="font-bold">
-                      {stats.total_values.total_sell_value 
-                        ? formatCurrency(parseFloat(stats.total_values.total_sell_value)) 
-                        : '$0.00'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-gray-50 p-4 rounded border">
-                <h3 className="text-lg font-semibold mb-2">Popular Symbols</h3>
-                <div className="space-y-2">
-                  {stats.popular_symbols.map((item) => (
-                    <div key={item.symbol} className="flex justify-between">
-                      <span>{item.symbol}</span>
-                      <span className="font-bold">{item.count}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="bg-gray-50 p-4 rounded border">
-                <h3 className="text-lg font-semibold mb-2">By Bot</h3>
-                <div className="space-y-2">
-                  {stats.bot_counts.map((item) => (
-                    <div key={item.bot_name || 'unnamed'} className="flex justify-between">
-                      <span>{item.bot_name || 'Unnamed Bot'}</span>
-                      <span className="font-bold">{item.count}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => {
+                setSelectedLog(null);
+                reset();
+                setOpenDialog(true);
+              }}
+            >
+              Add Trade Log
+            </Button>
+          </Box>
 
-      <div className="bg-white shadow-md rounded p-6 mb-6">
-        <h2 className="text-xl font-bold mb-4">Filter Logs</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-gray-700 mb-2">Symbol</label>
-            <input
-              type="text"
-              value={filters.symbol || ''}
-              onChange={(e) => handleFilterChange('symbol', e.target.value)}
-              className="w-full p-2 border rounded"
-              placeholder="BTC/USD"
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Bot</TableCell>
+                  <TableCell>Symbol</TableCell>
+                  <TableCell>Trade Type</TableCell>
+                  <TableCell>Quantity</TableCell>
+                  <TableCell>Price</TableCell>
+                  <TableCell>Total Value</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Exchange</TableCell>
+                  <TableCell>Created At</TableCell>
+                  <TableCell>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+              {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={10} align="center">Loading...</TableCell>
+                  </TableRow>
+              ) : tradeLogs.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={10} align="center">No trade logs found.</TableCell>
+                  </TableRow>
+              ) : (
+                tradeLogs.map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell>{log.bot_name || 'Unnamed Bot'}</TableCell>
+                      <TableCell>{log.symbol}</TableCell>
+                      <TableCell>{log.trade_type}</TableCell>
+                      <TableCell>{log.quantity}</TableCell>
+                      <TableCell>${log.price.toFixed(2)}</TableCell>
+                      <TableCell>${log.total_value.toFixed(2)}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={log.status}
+                          color={
+                            log.status === 'success'
+                              ? 'success'
+                              : log.status === 'failed'
+                              ? 'error'
+                              : 'warning'
+                          }
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>{log.exchange || '-'}</TableCell>
+                      <TableCell>
+                        {format(new Date(log.created_at), 'yyyy-MM-dd HH:mm:ss')}
+                      </TableCell>
+                      <TableCell>
+                        <Tooltip title="Edit">
+                          <IconButton size="small" onClick={() => handleEdit(log)}>
+                            <Edit />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Delete">
+                          <IconButton size="small" onClick={() => handleDelete(log.id)}>
+                            <Delete />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+            <TablePagination
+              component="div"
+              count={pagination.total}
+              page={pagination.page - 1}
+              onPageChange={(_, newPage) => handleFilterChange('page', newPage + 1)}
+              rowsPerPage={pagination.limit}
+              onRowsPerPageChange={(event) => handleFilterChange('limit', parseInt(event.target.value, 10))}
             />
-          </div>
-          
-          <div>
-            <label className="block text-gray-700 mb-2">Trade Type</label>
-            <select
-              value={filters.trade_type || ''}
-              onChange={(e) => handleFilterChange('trade_type', e.target.value)}
-              className="w-full p-2 border rounded"
-            >
-              <option value="">All Types</option>
-              <option value="buy">Buy</option>
-              <option value="sell">Sell</option>
-              <option value="limit_buy">Limit Buy</option>
-              <option value="limit_sell">Limit Sell</option>
-              <option value="market_buy">Market Buy</option>
-              <option value="market_sell">Market Sell</option>
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-gray-700 mb-2">Status</label>
-            <select
-              value={filters.status || ''}
-              onChange={(e) => handleFilterChange('status', e.target.value)}
-              className="w-full p-2 border rounded"
-            >
-              <option value="">All Statuses</option>
-              <option value="success">Success</option>
-              <option value="failed">Failed</option>
-              <option value="pending">Pending</option>
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-gray-700 mb-2">Bot Name</label>
-            <input
-              type="text"
-              value={filters.bot_name || ''}
-              onChange={(e) => handleFilterChange('bot_name', e.target.value)}
-              className="w-full p-2 border rounded"
-              placeholder="My Trading Bot"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-gray-700 mb-2">Start Date</label>
-            <input
-              type="date"
-              value={filters.start_date || ''}
-              onChange={(e) => handleFilterChange('start_date', e.target.value)}
-              className="w-full p-2 border rounded"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-gray-700 mb-2">End Date</label>
-            <input
-              type="date"
-              value={filters.end_date || ''}
-              onChange={(e) => handleFilterChange('end_date', e.target.value)}
-              className="w-full p-2 border rounded"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-gray-700 mb-2">Sort By</label>
-            <select
-              value={filters.sort_by || 'created_at'}
-              onChange={(e) => handleFilterChange('sort_by', e.target.value)}
-              className="w-full p-2 border rounded"
-            >
-              <option value="created_at">Date</option>
-              <option value="symbol">Symbol</option>
-              <option value="trade_type">Trade Type</option>
-              <option value="price">Price</option>
-              <option value="quantity">Quantity</option>
-              <option value="total_value">Total Value</option>
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-gray-700 mb-2">Sort Order</label>
-            <select
-              value={filters.sort_order || 'desc'}
-              onChange={(e) => handleFilterChange('sort_order', e.target.value as 'asc' | 'desc')}
-              className="w-full p-2 border rounded"
-            >
-              <option value="desc">Newest First</option>
-              <option value="asc">Oldest First</option>
-            </select>
-          </div>
-        </div>
-      </div>
+          </TableContainer>
 
-      <div className="bg-white shadow-md rounded overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date/Time</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Symbol</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bot</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {loading ? (
-              <tr>
-                <td colSpan={9} className="px-6 py-4 text-center">Loading...</td>
-              </tr>
-            ) : tradeLogs.length === 0 ? (
-              <tr>
-                <td colSpan={9} className="px-6 py-4 text-center">No trade logs found.</td>
-              </tr>
-            ) : (
-              tradeLogs.map((log) => (
-                <tr key={log.id}>
-                  <td className="px-6 py-4 whitespace-nowrap">{formatDate(log.created_at)}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{log.symbol}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{log.trade_type}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{log.quantity}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{formatCurrency(log.price)}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{formatCurrency(log.total_value)}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 rounded text-xs ${getStatusColor(log.status)}`}>
-                      {log.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">{log.bot_name || 'Unnamed Bot'}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <Link 
-                      href={`/trading/logs/${log.id}`}
-                      className="text-blue-500 hover:text-blue-700 mr-2"
-                    >
-                      Details
-                    </Link>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Pagination Controls */}
-      {pagination.pages > 1 && (
-        <div className="flex justify-between items-center mt-6">
-          <div>
-            Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} results
-          </div>
-          <div className="flex space-x-2">
-            <button
-              onClick={() => handleFilterChange('page', Math.max(1, pagination.page - 1))}
-              disabled={pagination.page === 1}
-              className={`px-4 py-2 rounded ${
-                pagination.page === 1
-                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                  : 'bg-blue-500 text-white hover:bg-blue-600'
-              }`}
-            >
-              Previous
-            </button>
-            {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
-              // Show 5 pages at most
-              let pageNum;
-              if (pagination.pages <= 5) {
-                // If we have 5 or fewer pages, show all
-                pageNum = i + 1;
-              } else if (pagination.page <= 3) {
-                // If we're at the start, show pages 1-5
-                pageNum = i + 1;
-              } else if (pagination.page >= pagination.pages - 2) {
-                // If we're at the end, show the last 5 pages
-                pageNum = pagination.pages - 4 + i;
-              } else {
-                // Otherwise show 2 pages before and after the current page
-                pageNum = pagination.page - 2 + i;
-              }
-              
-              return (
-                <button
-                  key={pageNum}
-                  onClick={() => handleFilterChange('page', pageNum)}
-                  className={`px-4 py-2 rounded ${
-                    pagination.page === pageNum
-                      ? 'bg-blue-700 text-white'
-                      : 'bg-blue-500 text-white hover:bg-blue-600'
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              );
-            })}
-            <button
-              onClick={() => handleFilterChange('page', Math.min(pagination.pages, pagination.page + 1))}
-              disabled={pagination.page === pagination.pages}
-              className={`px-4 py-2 rounded ${
-                pagination.page === pagination.pages
-                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                  : 'bg-blue-500 text-white hover:bg-blue-600'
-              }`}
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+          <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
+            <form onSubmit={handleSubmit(onSubmit)}>
+              <DialogTitle>
+                {selectedLog ? 'Edit Trade Log' : 'Add Trade Log'}
+              </DialogTitle>
+              <DialogContent>
+                <Grid container spacing={2} sx={{ mt: 1 }}>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth error={!!errors.trade_type}>
+                      <InputLabel>Trade Type</InputLabel>
+                      <Controller
+                        name="trade_type"
+                        control={control}
+                        render={({ field }) => (
+                          <Select {...field} label="Trade Type">
+                            <MenuItem value="market_buy">Market Buy</MenuItem>
+                            <MenuItem value="market_sell">Market Sell</MenuItem>
+                            <MenuItem value="limit_buy">Limit Buy</MenuItem>
+                            <MenuItem value="limit_sell">Limit Sell</MenuItem>
+                          </Select>
+                        )}
+                      />
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Controller
+                      name="symbol"
+                      control={control}
+                      render={({ field }) => (
+                        <TextField
+                          {...field}
+                          label="Symbol"
+                          fullWidth
+                          error={!!errors.symbol}
+                          helperText={errors.symbol?.message?.toString()}
+                        />
+                      )}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Controller
+                      name="quantity"
+                      control={control}
+                      render={({ field }) => (
+                        <TextField
+                          {...field}
+                          label="Quantity"
+                          type="number"
+                          fullWidth
+                          error={!!errors.quantity}
+                          helperText={errors.quantity?.message?.toString()}
+                        />
+                      )}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Controller
+                      name="price"
+                      control={control}
+                      render={({ field }) => (
+                        <TextField
+                          {...field}
+                          label="Price"
+                          type="number"
+                          fullWidth
+                          error={!!errors.price}
+                          helperText={errors.price?.message?.toString()}
+                        />
+                      )}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Controller
+                      name="total_value"
+                      control={control}
+                      render={({ field }) => (
+                        <TextField
+                          {...field}
+                          label="Total Value"
+                          type="number"
+                          fullWidth
+                          error={!!errors.total_value}
+                          helperText={errors.total_value?.message?.toString()}
+                        />
+                      )}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth>
+                      <InputLabel>Status</InputLabel>
+                      <Controller
+                        name="status"
+                        control={control}
+                        render={({ field }) => (
+                          <Select {...field} label="Status">
+                            <MenuItem value="success">Success</MenuItem>
+                            <MenuItem value="failed">Failed</MenuItem>
+                            <MenuItem value="pending">Pending</MenuItem>
+                          </Select>
+                        )}
+                      />
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth>
+                      <InputLabel>Exchange</InputLabel>
+                      <Controller
+                        name="exchange"
+                        control={control}
+                        render={({ field }) => (
+                          <Select {...field} label="Exchange">
+                            <MenuItem value="">None</MenuItem>
+                            <MenuItem value="binance">Binance</MenuItem>
+                            <MenuItem value="tradovate">Tradovate</MenuItem>
+                            <MenuItem value="coinbase">Coinbase</MenuItem>
+                          </Select>
+                        )}
+                      />
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Controller
+                      name="order_id"
+                      control={control}
+                      render={({ field }) => (
+                        <TextField
+                          {...field}
+                          label="Order ID"
+                          fullWidth
+                          error={!!errors.order_id}
+                          helperText={errors.order_id?.message?.toString()}
+                        />
+                      )}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Controller
+                      name="error_message"
+                      control={control}
+                      render={({ field }) => (
+                        <TextField
+                          {...field}
+                          label="Error Message"
+                          fullWidth
+                          multiline
+                          rows={4}
+                          error={!!errors.error_message}
+                          helperText={errors.error_message?.message?.toString()}
+                        />
+                      )}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Controller
+                      name="metadata"
+                      control={control}
+                      render={({ field }) => (
+                        <TextField
+                          {...field}
+                          label="Metadata"
+                          fullWidth
+                          multiline
+                          rows={4}
+                          error={!!errors.metadata}
+                          helperText={errors.metadata?.message?.toString()}
+                        />
+                      )}
+                    />
+                  </Grid>
+                </Grid>
+              </DialogContent>
+              <DialogActions>
+                <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
+                <Button type="submit" variant="contained">
+                  {selectedLog ? 'Update' : 'Create'}
+                </Button>
+              </DialogActions>
+            </form>
+          </Dialog>
+        </Box>
+      </Container>
+    </LocalizationProvider>
   );
 } 

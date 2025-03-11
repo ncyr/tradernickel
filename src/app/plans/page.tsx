@@ -80,23 +80,16 @@ const PlansPage = () => {
     <div className="fade-in">
       <PageHeader
         title="Trading Plans"
-        description="Manage your trading strategies and configurations"
-        actions={
+        subtitle="Manage your trading strategies and configurations"
+        action={
           <>
             <Button
-              variant="outlined"
-              startIcon={<RefreshIcon />}
-              onClick={handleRefresh}
-              disabled={refreshing}
-            >
-              {refreshing ? 'Refreshing...' : 'Refresh'}
-            </Button>
-            <Button
               variant="contained"
+              color="primary"
               startIcon={<AddIcon />}
               onClick={() => router.push('/plans/new')}
             >
-              New Plan
+              Create Plan
             </Button>
           </>
         }

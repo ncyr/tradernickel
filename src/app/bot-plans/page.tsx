@@ -44,10 +44,21 @@ const BotPlansPage = () => {
           return;
         }
 
-        const data = await botPlanService.getBotPlans();
+        const response = await fetch('/api/bot-plans', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
         setBotPlans(data);
       } catch (err: any) {
-        setError(err.response?.data?.error || 'Failed to load bot plans');
+        console.error('Error loading bot plans:', err);
+        setError(err.message || 'Failed to load bot plans');
       } finally {
         setLoading(false);
       }
@@ -68,15 +79,15 @@ const BotPlansPage = () => {
     <div className="fade-in">
       <PageHeader
         title="Bot Plans"
-        description="Manage the trading plans assigned to your bots"
-        actions={
+        subtitle="Manage the trading plans assigned to your bots"
+        action={
           <Button
             variant="contained"
             color="primary"
             startIcon={<AddIcon />}
             onClick={() => router.push('/bot-plans/new')}
           >
-            Assign Plan to Bot
+            Create Bot Plan
           </Button>
         }
       />

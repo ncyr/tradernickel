@@ -1,12 +1,14 @@
 import api from './index';
+import { AxiosResponse } from 'axios';
 
 export interface Schedule {
   id: number;
+  weekday: number;
   start_at: string;
   end_at: string;
-  weekday: number;
   bot_plan_id: number;
   created_at: string;
+  updated_at: string;
 }
 
 export interface CreateScheduleDTO {
@@ -19,27 +21,27 @@ export interface CreateScheduleDTO {
 export interface UpdateScheduleDTO extends Partial<CreateScheduleDTO> {}
 
 export const scheduleService = {
-  getSchedules: async (): Promise<Schedule[]> => {
-    const response = await api.get('/schedules');
-    return response.data;
+  setAuthHeader: (authHeader: string) => {
+    api.defaults.headers.common.Authorization = authHeader;
   },
-
-  getSchedule: async (id: number): Promise<Schedule> => {
-    const response = await api.get(`/schedules/${id}`);
-    return response.data;
-  },
-
-  createSchedule: async (schedule: CreateScheduleDTO): Promise<Schedule> => {
-    const response = await api.post('/schedules', schedule);
-    return response.data;
-  },
-
-  updateSchedule: async (id: number, data: UpdateScheduleDTO): Promise<Schedule> => {
-    const response = await api.patch(`/schedules/${id}`, data);
-    return response.data;
-  },
-
-  deleteSchedule: async (id: number): Promise<void> => {
-    await api.delete(`/schedules/${id}`);
-  },
+  
+  getSchedules: () => 
+    api.get<Schedule[]>('/v1/schedules')
+      .then((response: AxiosResponse<Schedule[]>) => response.data),
+  
+  getSchedule: (id: string | number) => 
+    api.get<Schedule>(`/v1/schedules/${id}`)
+      .then((response: AxiosResponse<Schedule>) => response.data),
+  
+  createSchedule: (data: Partial<Schedule>) => 
+    api.post<Schedule>('/v1/schedules', data)
+      .then((response: AxiosResponse<Schedule>) => response.data),
+  
+  updateSchedule: (id: string | number, data: Partial<Schedule>) => 
+    api.put<Schedule>(`/v1/schedules/${id}`, data)
+      .then((response: AxiosResponse<Schedule>) => response.data),
+  
+  deleteSchedule: (id: string | number) => 
+    api.delete(`/v1/schedules/${id}`)
+      .then((response: AxiosResponse<void>) => response.data),
 }; 

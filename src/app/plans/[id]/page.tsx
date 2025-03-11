@@ -30,6 +30,7 @@ import FormInput from '@/components/FormInput';
 import { useFormValidation, commonValidationRules } from '@/hooks/useFormValidation';
 import { authService } from '@/services/api/auth';
 import { planService } from '@/services/api/plans';
+import { brokerService } from '@/services/api/brokers';
 
 interface FormValues {
   name: string;
@@ -129,19 +130,29 @@ const PlanDetailPage = () => {
         }
 
         // Load brokers
-        const brokersResponse = await fetch('/api/brokers').then(res => {
-          if (!res.ok) throw new Error('Failed to load brokers');
-          return res.json();
-        }).catch(() => {
-          // If we can't load brokers, use a mock list
-          return [
-            { id: 1, name: 'Tradovate' },
-            { id: 2, name: 'Interactive Brokers' },
-            { id: 3, name: 'TD Ameritrade' },
-          ];
-        });
-
-        setBrokers(brokersResponse);
+        try {
+          const token = localStorage.getItem('token');
+          const brokersResponse = await fetch('/api/brokers', {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          
+          if (!brokersResponse.ok) {
+            throw new Error(`Failed to load brokers: ${brokersResponse.statusText}`);
+          }
+          
+          const brokersData = await brokersResponse.json();
+          if (Array.isArray(brokersData)) {
+            setBrokers(brokersData);
+          } else {
+            console.error('Unexpected brokers data format:', brokersData);
+            setError('Failed to load brokers: Invalid data format');
+          }
+        } catch (err) {
+          console.error('Error loading brokers:', err);
+          setError('Failed to load brokers. Some features may be limited.');
+        }
 
         // If editing existing plan, load it
         if (!isNew) {
@@ -265,17 +276,37 @@ const PlanDetailPage = () => {
     <div className="fade-in">
       <PageHeader
         title={isNew ? 'Create Plan' : 'Edit Plan'}
-        description={isNew 
+        subtitle={isNew 
           ? 'Create a new trading strategy plan' 
           : 'Modify your existing trading plan'}
-        actions={
-          <Button
-            variant="outlined"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => router.push('/plans')}
-          >
-            Back to Plans
-          </Button>
+        action={
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              variant="outlined"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => router.back()}
+            >
+              Back
+            </Button>
+            {!isNew && (
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<DeleteIcon />}
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                Delete
+              </Button>
+            )}
+            <Button
+              variant="contained"
+              startIcon={<SaveIcon />}
+              onClick={handleSubmit}
+              disabled={submitting}
+            >
+              {submitting ? 'Saving...' : 'Save'}
+            </Button>
+          </Box>
         }
       />
 
@@ -328,13 +359,14 @@ const PlanDetailPage = () => {
                   errors={errors.broker_id || []}
                   touched={touched.broker_id}
                   fullWidth
+                  helperText="Select the broker to use for this trading plan"
                 >
                   <MenuItem value="" disabled>
                     Select a broker
                   </MenuItem>
                   {brokers.map((broker) => (
                     <MenuItem key={broker.id} value={broker.id.toString()}>
-                      {broker.name}
+                      {broker.name} {broker.active ? '(Active)' : '(Inactive)'}
                     </MenuItem>
                   ))}
                 </FormInput>
@@ -471,30 +503,6 @@ const PlanDetailPage = () => {
                 <Typography variant="caption" color="text.secondary" display="block">
                   When enabled, trades will be executed in the same direction as the signal
                 </Typography>
-              </Grid>
-
-              <Grid item xs={12}>
-                <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
-                  {!isNew && (
-                    <Button
-                      variant="outlined"
-                      color="error"
-                      startIcon={<DeleteIcon />}
-                      onClick={() => setDeleteDialogOpen(true)}
-                      disabled={submitting}
-                    >
-                      Delete
-                    </Button>
-                  )}
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    startIcon={submitting ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
-                    disabled={submitting}
-                  >
-                    {submitting ? 'Saving...' : 'Save Plan'}
-                  </Button>
-                </Box>
               </Grid>
             </Grid>
           </form>

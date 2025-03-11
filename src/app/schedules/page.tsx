@@ -104,8 +104,8 @@ const SchedulesPage = () => {
     <div className="fade-in">
       <PageHeader
         title="Trading Schedules"
-        description="Manage when your trading bots run automatically"
-        actions={
+        subtitle="Manage when your trading bots run automatically"
+        action={
           <>
             <Button
               variant="outlined"

@@ -84,60 +84,78 @@ const BotPlanDetailPage = () => {
     validationRules
   );
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const user = await authService.getCurrentUser();
-        if (!user) {
-          router.push('/login');
-          return;
-        }
-
-        // Load bots and plans in parallel
-        const [botsResponse, plansResponse] = await Promise.all([
-          fetch('/api/bots').then(res => res.json()),
-          planService.getPlans()
-        ]);
-
-        setBots(botsResponse);
-        setPlans(plansResponse);
-
-        // If editing existing bot plan, load it
-        if (!isNew) {
-          try {
-            const botPlan = await botPlanService.getBotPlan(parseInt(id));
-            setValues({
-              bot_id: botPlan.bot_id.toString(),
-              plan_id: botPlan.plan_id.toString(),
-              metadata: botPlan.metadata ? JSON.stringify(botPlan.metadata, null, 2) : '{}',
-            });
-          } catch (err) {
-            console.error("Error loading bot plan:", err);
-            setError("Failed to load bot plan data");
-          }
-        }
-
-        setLoading(false);
-      } catch (err: any) {
-        setError(err.response?.data?.error || 'Failed to load data');
-        setLoading(false);
-      }
-    };
-
-    loadData();
-  }, [id, isNew, router, setValues]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    if (!validateForm()) {
-      return;
-    }
-
-    setSubmitting(true);
-
+  const loadData = async () => {
     try {
+      setLoading(true);
+      setError(null);
+
+      const user = await authService.getCurrentUser();
+      if (!user) {
+        router.push('/login');
+        return;
+      }
+
+      // Forward auth header
+      const token = localStorage.getItem('token');
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
+      botPlanService.setAuthHeader(`Bearer ${token}`);
+
+      // Load bots and plans for dropdowns
+      const [botsData, plansData] = await Promise.all([
+        fetch('/api/bots', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }).then(res => {
+          if (!res.ok) throw new Error('Failed to load bots');
+          return res.json();
+        }),
+        fetch('/api/plans', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }).then(res => {
+          if (!res.ok) throw new Error('Failed to load plans');
+          return res.json();
+        })
+      ]);
+
+      setBots(botsData);
+      setPlans(plansData);
+
+      if (!isNew) {
+        const botPlan = await botPlanService.getBotPlan(id);
+        setValues({
+          bot_id: botPlan.bot_id.toString(),
+          plan_id: botPlan.plan_id.toString(),
+          metadata: JSON.stringify(botPlan.metadata || {}, null, 2),
+        });
+      }
+    } catch (err: any) {
+      console.error('Error loading data:', err);
+      setError(err.response?.data?.error || err.message || 'Failed to load required data');
+      if (err.response?.status === 401 || err.message?.includes('401')) {
+        router.push('/login');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      setSubmitting(true);
+      setError(null);
+
+      const isValid = await validateForm();
+      if (!isValid) {
+        return;
+      }
+
       const botPlanData = {
         bot_id: parseInt(values.bot_id),
         plan_id: parseInt(values.plan_id),
@@ -147,28 +165,43 @@ const BotPlanDetailPage = () => {
       if (isNew) {
         await botPlanService.createBotPlan(botPlanData);
       } else {
-        await botPlanService.updateBotPlan(parseInt(id), botPlanData);
+        await botPlanService.updateBotPlan(id, botPlanData);
       }
 
-      router.push('/bot-plans');
+      router.push('/bot-plans/');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to save bot plan');
+      console.error('Error saving bot plan:', err);
+      setError(err.response?.data?.error || err.message || 'Failed to save bot plan');
+      if (err.response?.status === 401) {
+        router.push('/login');
+      }
+    } finally {
       setSubmitting(false);
     }
   };
 
   const handleDelete = async () => {
-    setDeleteDialogOpen(false);
-    setSubmitting(true);
-
     try {
-      await botPlanService.deleteBotPlan(parseInt(id));
-      router.push('/bot-plans');
+      setSubmitting(true);
+      setError(null);
+
+      await botPlanService.deleteBotPlan(id);
+      router.push('/bot-plans/');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to delete bot plan');
+      console.error('Error deleting bot plan:', err);
+      setError(err.response?.data?.error || err.message || 'Failed to delete bot plan');
+      if (err.response?.status === 401) {
+        router.push('/login');
+      }
+    } finally {
       setSubmitting(false);
+      setDeleteDialogOpen(false);
     }
   };
+
+  useEffect(() => {
+    loadData();
+  }, [id, isNew, router, setValues]);
 
   if (loading) {
     return (
@@ -182,17 +215,37 @@ const BotPlanDetailPage = () => {
     <div className="fade-in">
       <PageHeader
         title={isNew ? 'Create Bot Plan' : 'Edit Bot Plan'}
-        description={isNew 
+        subtitle={isNew 
           ? 'Assign a trading plan to a bot' 
           : 'Modify the plan assigned to your bot'}
-        actions={
-          <Button
-            variant="outlined"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => router.push('/bot-plans')}
-          >
-            Back to Bot Plans
-          </Button>
+        action={
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              variant="outlined"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => router.back()}
+            >
+              Back
+            </Button>
+            {!isNew && (
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<DeleteIcon />}
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                Delete
+              </Button>
+            )}
+            <Button
+              variant="contained"
+              startIcon={<SaveIcon />}
+              onClick={handleSave}
+              disabled={submitting}
+            >
+              {submitting ? 'Saving...' : 'Save'}
+            </Button>
+          </Box>
         }
       />
 
@@ -204,7 +257,7 @@ const BotPlanDetailPage = () => {
 
       <Card sx={{ mb: 4 }}>
         <CardContent sx={{ p: 4 }}>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSave}>
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
                 <FormInput
@@ -269,30 +322,6 @@ const BotPlanDetailPage = () => {
                   rows={6}
                   helperText="Additional configuration in JSON format"
                 />
-              </Grid>
-
-              <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
-                {!isNew && (
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    startIcon={<DeleteIcon />}
-                    onClick={() => setDeleteDialogOpen(true)}
-                    disabled={submitting}
-                  >
-                    Delete
-                  </Button>
-                )}
-                <Button
-                  type="submit"
-                  variant="contained"
-                  color="primary"
-                  startIcon={<SaveIcon />}
-                  disabled={submitting}
-                  sx={{ ml: 'auto' }}
-                >
-                  {submitting ? 'Saving...' : 'Save'}
-                </Button>
               </Grid>
             </Grid>
           </form>

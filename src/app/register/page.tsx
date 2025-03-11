@@ -62,7 +62,7 @@ export default function RegisterPage() {
     validationRules
   );
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
 
@@ -91,8 +91,8 @@ export default function RegisterPage() {
     <div className="fade-in">
       <PageHeader
         title="Create Account"
-        description="Join Trader Nickel to start automating your trading strategies"
-        actions={
+        subtitle="Join Trader Nickel to start automating your trading strategies"
+        action={
           <Button
             variant="outlined"
             startIcon={<ArrowBackIcon />}
@@ -118,7 +118,7 @@ export default function RegisterPage() {
                   label="Username"
                   name="username"
                   value={values.username}
-                  onChange={(e) => handleChange('username', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('username', e.target.value)}
                   onBlur={() => handleBlur('username')}
                   errors={errors.username || []}
                   touched={touched.username}
@@ -134,7 +134,7 @@ export default function RegisterPage() {
                   type="password"
                   showPasswordToggle
                   value={values.password}
-                  onChange={(e) => handleChange('password', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('password', e.target.value)}
                   onBlur={() => handleBlur('password')}
                   errors={errors.password || []}
                   touched={touched.password}
@@ -148,7 +148,7 @@ export default function RegisterPage() {
                   label="Full Name"
                   name="name"
                   value={values.name}
-                  onChange={(e) => handleChange('name', e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('name', e.target.value)}
                   onBlur={() => handleBlur('name')}
                   errors={errors.name || []}
                   touched={touched.name}

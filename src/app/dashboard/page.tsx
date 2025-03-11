@@ -73,8 +73,15 @@ const DashboardPage = () => {
       let activeBots = 0;
       try {
         console.log('Fetching bots data...');
-        const botsResponse = await api.get('/bots');
-        bots = botsResponse.data || [];
+        const botsResponse = await fetch('/api/bots', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (!botsResponse.ok) {
+          throw new Error('Failed to fetch bots');
+        }
+        bots = await botsResponse.json();
         activeBots = bots.filter(bot => bot.active).length;
         console.log(`Fetched ${bots.length} bots, ${activeBots} active`);
       } catch (botErr) {
@@ -87,8 +94,15 @@ const DashboardPage = () => {
       let upcomingSchedules = 0;
       try {
         console.log('Fetching schedules data...');
-        const schedulesResponse = await api.get('/schedules');
-        schedules = schedulesResponse.data || [];
+        const schedulesResponse = await fetch('/api/schedules', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (!schedulesResponse.ok) {
+          throw new Error('Failed to fetch schedules');
+        }
+        schedules = await schedulesResponse.json();
         activeSchedules = schedules.filter(schedule => schedule.active).length;
         upcomingSchedules = schedules.filter(schedule => !schedule.active).length;
         console.log(`Fetched ${schedules.length} schedules, ${activeSchedules} active, ${upcomingSchedules} upcoming`);
@@ -100,20 +114,50 @@ const DashboardPage = () => {
       let plans: Plan[] = [];
       try {
         console.log('Fetching plans data...');
-        const plansResponse = await api.get('/plans');
-        plans = plansResponse.data || [];
+        const plansResponse = await fetch('/api/plans', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (!plansResponse.ok) {
+          throw new Error('Failed to fetch plans');
+        }
+        plans = await plansResponse.json();
         console.log(`Fetched ${plans.length} plans`);
       } catch (planErr) {
         console.error('Error fetching plans:', planErr);
         // Continue with other requests
       }
 
+      // Fetch trade stats
+      let tradeStats = {
+        total_trades: 0,
+        profit_today: 0,
+        profit_total: 0,
+      };
+      try {
+        console.log('Fetching trade stats...');
+        const tradeStatsResponse = await fetch('/api/trades/stats', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (!tradeStatsResponse.ok) {
+          throw new Error('Failed to fetch trade stats');
+        }
+        tradeStats = await tradeStatsResponse.json();
+        console.log('Trade stats:', tradeStats);
+      } catch (statsErr) {
+        console.error('Error fetching trade stats:', statsErr);
+        // Continue with other requests
+      }
+
       // Update stats with real data
       setStats({
         activeBots,
-        totalTrades: 0, // This will be updated when we implement trade history
-        profitToday: 0, // This will be updated when we implement profit tracking
-        profitTotal: 0, // This will be updated when we implement profit tracking
+        totalTrades: tradeStats.total_trades,
+        profitToday: tradeStats.profit_today,
+        profitTotal: tradeStats.profit_total,
         activeSchedules,
         upcomingSchedules,
       });
@@ -131,11 +175,19 @@ const DashboardPage = () => {
     const checkAuth = async () => {
       try {
         console.log('Dashboard: Checking authentication');
-        // First check if token exists directly
+        
+        // Check both cookie and localStorage
+        const hasCookie = document.cookie.includes('token=');
         const token = localStorage.getItem('token');
-        if (!token) {
-          console.log('Dashboard: No token found, redirecting to login');
-          router.push('/login');
+        
+        console.log('Dashboard: Auth state:', {
+          hasCookie,
+          hasLocalStorage: !!token
+        });
+        
+        if (!hasCookie || !token) {
+          console.log('Dashboard: Missing auth data, redirecting to login');
+          window.location.href = '/login';
           return;
         }
         
@@ -145,7 +197,7 @@ const DashboardPage = () => {
         
         if (!user) {
           console.log('Dashboard: No user found, redirecting to login');
-          router.push('/login');
+          window.location.href = '/login';
           return;
         }
         
@@ -163,7 +215,7 @@ const DashboardPage = () => {
         console.error('Dashboard: Error in authentication check:', err);
         if (isMounted) {
           setError('Authentication error. Please log in again.');
-          router.push('/login');
+          window.location.href = '/login';
           setLoading(false);
         }
       }
@@ -174,7 +226,7 @@ const DashboardPage = () => {
     return () => {
       isMounted = false;
     };
-  }, [router]);
+  }, []);
 
   const handleRefresh = async () => {
     try {

@@ -114,7 +114,11 @@ const BrokerDetailPage = () => {
         // If editing existing broker, load it
         if (!isNew) {
           try {
-            const broker = await brokerService.getBroker(parseInt(id));
+            const response = await fetch(`/api/brokers/${id}`);
+            if (!response.ok) {
+              throw new Error('Failed to load broker');
+            }
+            const broker = await response.json();
             setValues({
               name: broker.name,
               active: broker.active,
@@ -149,6 +153,11 @@ const BrokerDetailPage = () => {
     setSubmitting(true);
 
     try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Not authenticated');
+      }
+
       const brokerData = {
         name: values.name,
         active: values.active,
@@ -157,15 +166,25 @@ const BrokerDetailPage = () => {
         prod_url: values.prod_url,
       };
 
-      if (isNew) {
-        await brokerService.createBroker(brokerData);
-      } else {
-        await brokerService.updateBroker(parseInt(id), brokerData);
+      const response = await fetch(`/api/brokers${id !== 'new' ? `/${id}` : ''}`, {
+        method: id !== 'new' ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(brokerData),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to save broker');
       }
 
       router.push('/brokers');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to save broker');
+      console.error('Error saving broker:', err);
+      setError(err.message || 'Failed to save broker');
+    } finally {
       setSubmitting(false);
     }
   };
@@ -175,10 +194,28 @@ const BrokerDetailPage = () => {
     setSubmitting(true);
 
     try {
-      await brokerService.deleteBroker(parseInt(id));
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch(`/api/brokers/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to delete broker');
+      }
+
       router.push('/brokers');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to delete broker');
+      console.error('Error deleting broker:', err);
+      setError(err.message || 'Failed to delete broker');
+    } finally {
       setSubmitting(false);
     }
   };
@@ -196,15 +233,14 @@ const BrokerDetailPage = () => {
       <Box sx={{ py: 4 }}>
         <PageHeader
           title="Broker Management"
-          description="Manage trading brokers"
-          actions={
+          subtitle="Manage trading brokers"
+          action={
             <Button
               variant="outlined"
               startIcon={<ArrowBackIcon />}
-              component={Link}
-              href="/brokers"
+              onClick={() => router.back()}
             >
-              Back to Brokers
+              Back
             </Button>
           }
         />
@@ -219,18 +255,37 @@ const BrokerDetailPage = () => {
     <div className="fade-in">
       <PageHeader
         title={isNew ? 'Create Broker' : 'Edit Broker'}
-        description={isNew 
+        subtitle={isNew 
           ? 'Add a new trading broker to the system' 
           : 'Modify an existing trading broker'}
-        actions={
-          <Button
-            variant="outlined"
-            startIcon={<ArrowBackIcon />}
-            component={Link}
-            href="/brokers"
-          >
-            Back to Brokers
-          </Button>
+        action={
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              variant="outlined"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => router.back()}
+            >
+              Back
+            </Button>
+            {!isNew && (
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<DeleteIcon />}
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                Delete
+              </Button>
+            )}
+            <Button
+              variant="contained"
+              startIcon={<SaveIcon />}
+              onClick={handleSubmit}
+              disabled={submitting}
+            >
+              {submitting ? 'Saving...' : 'Save'}
+            </Button>
+          </Box>
         }
       />
 
@@ -313,30 +368,6 @@ const BrokerDetailPage = () => {
                   rows={6}
                   helperText="Additional configuration in JSON format"
                 />
-              </Grid>
-
-              <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
-                {!isNew && (
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    startIcon={<DeleteIcon />}
-                    onClick={() => setDeleteDialogOpen(true)}
-                    disabled={submitting}
-                  >
-                    Delete
-                  </Button>
-                )}
-                <Button
-                  type="submit"
-                  variant="contained"
-                  color="primary"
-                  startIcon={<SaveIcon />}
-                  disabled={submitting}
-                  sx={{ ml: 'auto' }}
-                >
-                  {submitting ? 'Saving...' : 'Save'}
-                </Button>
               </Grid>
             </Grid>
           </form>

@@ -28,13 +28,7 @@ import FormInput from '@/components/FormInput';
 import { useFormValidation, commonValidationRules } from '@/hooks/useFormValidation';
 import { authService } from '@/services/api/auth';
 import { scheduleService } from '@/services/api/schedules';
-
-// Temporary mock for bot plans until we create the service
-const mockBotPlans = [
-  { id: 1, bot_name: 'Trading Bot 1', plan_name: 'Aggressive Growth' },
-  { id: 2, bot_name: 'Trading Bot 2', plan_name: 'Conservative' },
-  { id: 3, bot_name: 'Crypto Bot', plan_name: 'Balanced' },
-];
+import { botPlanService } from '@/services/api/botPlans';
 
 // Weekday options
 const weekdays = [
@@ -63,11 +57,11 @@ const ScheduleDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [botPlans, setBotPlans] = useState(mockBotPlans);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [botPlans, setBotPlans] = useState<any[]>([]);
 
   const initialValues: FormValues = {
-    weekday: 1, // Monday default
+    weekday: 1, // Monday
     start_at: '09:00',
     end_at: '17:00',
     bot_plan_id: '',
@@ -111,37 +105,33 @@ const ScheduleDetailPage = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const user = await authService.getCurrentUser();
-        if (!user) {
-          router.push('/login');
-          return;
+        setLoading(true);
+        const [scheduleData, botPlansData] = await Promise.all([
+          id !== 'new' ? scheduleService.getSchedule(id) : null,
+          botPlanService.getBotPlansWithNames(),
+        ]);
+
+        if (scheduleData) {
+          setValues({
+            weekday: scheduleData.weekday,
+            start_at: scheduleData.start_at,
+            end_at: scheduleData.end_at,
+            bot_plan_id: scheduleData.bot_plan_id.toString(),
+          });
         }
 
-        // If editing existing schedule, load it
-        if (!isNew) {
-          try {
-            const schedule = await scheduleService.getSchedule(parseInt(id));
-            setValues({
-              weekday: schedule.weekday,
-              start_at: schedule.start_at,
-              end_at: schedule.end_at,
-              bot_plan_id: schedule.bot_plan_id.toString(),
-            });
-          } catch (err) {
-            console.error("Error loading schedule:", err);
-            setError("Failed to load schedule data");
-          }
-        }
-
-        setLoading(false);
+        setBotPlans(botPlansData);
+        setError(null);
       } catch (err: any) {
+        console.error('Error loading data:', err);
         setError(err.response?.data?.error || 'Failed to load data');
+      } finally {
         setLoading(false);
       }
     };
 
     loadData();
-  }, [id, isNew, router, setValues]);
+  }, [id, setValues]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -199,17 +189,37 @@ const ScheduleDetailPage = () => {
     <div className="fade-in">
       <PageHeader
         title={isNew ? 'Create Schedule' : 'Edit Schedule'}
-        description={isNew 
+        subtitle={isNew 
           ? 'Set up a new trading schedule for your bot plan' 
           : 'Modify your existing trading schedule'}
-        actions={
-          <Button
-            variant="outlined"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => router.push('/schedules')}
-          >
-            Back to Schedules
-          </Button>
+        action={
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              variant="outlined"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => router.back()}
+            >
+              Back
+            </Button>
+            {!isNew && (
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<DeleteIcon />}
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                Delete
+              </Button>
+            )}
+            <Button
+              variant="contained"
+              startIcon={<SaveIcon />}
+              onClick={handleSubmit}
+              disabled={submitting}
+            >
+              {submitting ? 'Saving...' : 'Save'}
+            </Button>
+          </Box>
         }
       />
 

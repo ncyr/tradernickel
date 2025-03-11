@@ -1,11 +1,13 @@
 import api from './index';
+import { AxiosResponse } from 'axios';
 
 export interface BotPlan {
   id: number;
   bot_id: number;
   plan_id: number;
-  metadata: any;
+  metadata?: Record<string, any>;
   created_at: string;
+  updated_at: string;
   bot_name?: string;
   plan_name?: string;
   owner_id?: number;
@@ -21,27 +23,31 @@ export interface CreateBotPlanDTO {
 export interface UpdateBotPlanDTO extends Partial<CreateBotPlanDTO> {}
 
 export const botPlanService = {
-  getBotPlans: async (): Promise<BotPlan[]> => {
-    const response = await api.get('/bot_plans');
-    return response.data;
+  setAuthHeader: (authHeader: string) => {
+    api.defaults.headers.common.Authorization = authHeader;
   },
+  
+  getBotPlans: () => 
+    api.get<BotPlan[]>('/v1/bot-plans')
+      .then((response: AxiosResponse<BotPlan[]>) => response.data),
+  
+  getBotPlan: (id: string | number) => 
+    api.get<BotPlan>(`/v1/bot-plans/${id}`)
+      .then((response: AxiosResponse<BotPlan>) => response.data),
+  
+  createBotPlan: (data: CreateBotPlanDTO) => 
+    api.post<BotPlan>('/v1/bot-plans', data)
+      .then((response: AxiosResponse<BotPlan>) => response.data),
+  
+  updateBotPlan: (id: string | number, data: UpdateBotPlanDTO) => 
+    api.patch<BotPlan>(`/v1/bot-plans/${id}`, data)
+      .then((response: AxiosResponse<BotPlan>) => response.data),
+  
+  deleteBotPlan: (id: string | number) => 
+    api.delete(`/v1/bot-plans/${id}`)
+      .then((response: AxiosResponse<void>) => response.data),
 
-  getBotPlan: async (id: number): Promise<BotPlan> => {
-    const response = await api.get(`/bot_plans/${id}`);
-    return response.data;
-  },
-
-  createBotPlan: async (data: CreateBotPlanDTO): Promise<BotPlan> => {
-    const response = await api.post('/bot_plans', data);
-    return response.data;
-  },
-
-  updateBotPlan: async (id: number, data: UpdateBotPlanDTO): Promise<BotPlan> => {
-    const response = await api.patch(`/bot_plans/${id}`, data);
-    return response.data;
-  },
-
-  deleteBotPlan: async (id: number): Promise<void> => {
-    await api.delete(`/bot_plans/${id}`);
-  },
+  getBotPlansWithNames: () =>
+    api.get<BotPlan[]>('/v1/bot-plans/with-names')
+      .then((response: AxiosResponse<BotPlan[]>) => response.data),
 }; 

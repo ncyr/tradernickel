@@ -1,4 +1,4 @@
-import api from './index';
+import api, { setAuthToken } from './index';
 
 export interface LoginResponse {
   user: User;
@@ -10,6 +10,7 @@ export interface User {
   id: number;
   username: string;
   name: string;
+  email: string;
   active: boolean;
   role: 'admin' | 'premium' | 'user';
 }
@@ -74,52 +75,27 @@ export interface CreateApiKeyDTO {
 export const authService = {
   login: async (credentials: LoginDTO): Promise<LoginResponse> => {
     console.log('Auth service login called with:', { username: credentials.username });
-    console.log('API URL:', process.env.NEXT_PUBLIC_API_URL);
-    console.log('API base URL:', api.defaults.baseURL);
-    console.log('Full request URL will be:', api.defaults.baseURL + '/users/login');
-    
     try {
-      console.log('Sending login request to:', '/users/login');
-      const response = await api.post('/users/login', credentials);
-      console.log('Login API response:', response);
-      
-      const { token, expiresAt, user } = response.data;
-      
-      // Store all auth data at once
-      const authData = {
-        token,
-        expiresAt: expiresAt.toString(),
-        user: JSON.stringify(user)
-      };
-      
-      console.log('Storing auth data:', { token: token.substring(0, 10) + '...', expiresAt, user });
-      
-      // Batch localStorage operations
-      Object.entries(authData).forEach(([key, value]) => {
-        try {
-          localStorage.setItem(key, value);
-          console.log(`Successfully stored ${key} in localStorage`);
-        } catch (error) {
-          console.error(`Error storing ${key} in localStorage:`, error);
-        }
-      });
-      
-      // Set cookie with proper path and expiry
-      try {
-        document.cookie = `token=${token}; path=/; max-age=${60 * 60 * 24}`; // 24 hours
-        console.log('Successfully set token cookie');
-      } catch (error) {
-        console.error('Error setting token cookie:', error);
+      const response = await api.post('/v1/auth/login', credentials);
+      const { token, user, expiresAt } = response.data;
+
+      // Only store in localStorage if we're in a browser environment
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(user));
+        localStorage.setItem('expiresAt', expiresAt.toString());
+
+        // Set cookie with expiration
+        const maxAge = Math.floor((expiresAt - Date.now()) / 1000); // Convert to seconds
+        document.cookie = `token=${token}; path=/; max-age=${maxAge}`;
       }
-      
+
       // Set authorization header
-      try {
-        api.defaults.headers.common.Authorization = `Bearer ${token}`;
-        console.log('Successfully set Authorization header');
-      } catch (error) {
-        console.error('Error setting Authorization header:', error);
-      }
-      
+      setAuthToken(token);
+
+      // Setup token renewal
+      authService.setupTokenRenewal();
+
       return response.data;
     } catch (error: any) {
       console.error('Login API error:', error);
@@ -134,7 +110,7 @@ export const authService = {
   },
 
   createUser: async (userData: CreateUserDTO): Promise<User> => {
-    const response = await api.post('/users', userData);
+    const response = await api.post('/v1/users', userData);
     return response.data;
   },
 
@@ -143,7 +119,7 @@ export const authService = {
     if (!token) throw new Error('Not authenticated');
     
     api.defaults.headers.common.Authorization = `Bearer ${token}`;
-    const response = await api.put(`/users/${id}`, userData);
+    const response = await api.put(`/v1/users/${id}`, userData);
     return response.data;
   },
 
@@ -160,7 +136,7 @@ export const authService = {
         throw new Error('Password must be 100 characters or less');
       }
 
-      const response = await api.post('/users/register', userData);
+      const response = await api.post('/v1/users/register', userData);
       return response.data;
     } catch (error: any) {
       console.error('Registration error:', error.response?.data || error.message);
@@ -170,16 +146,18 @@ export const authService = {
 
   logout: async (): Promise<void> => {
     try {
-      // Clear localStorage
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      localStorage.removeItem('expiresAt');
+      if (typeof window !== 'undefined') {
+        // Clear localStorage
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('expiresAt');
 
-      // Clear cookie
-      document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT';
+        // Clear cookie
+        document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT';
+      }
 
       // Clear Authorization header
-      delete api.defaults.headers.common.Authorization;
+      setAuthToken(null);
 
       console.log('Successfully logged out');
     } catch (error) {
@@ -189,18 +167,36 @@ export const authService = {
   },
 
   initializeAuth: () => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+
     const token = localStorage.getItem('token');
-    if (!token) return false;
+    const expiresAt = localStorage.getItem('expiresAt');
+    const user = localStorage.getItem('user');
 
-    // Only set if not already set
-    if (!api.defaults.headers.common.Authorization) {
-      api.defaults.headers.common.Authorization = `Bearer ${token}`;
+    if (!token || !expiresAt || !user) {
+      console.log('Missing auth data:', { token: !!token, expiresAt: !!expiresAt, user: !!user });
+      return false;
     }
 
-    // Only set cookie if not present
-    if (!document.cookie.includes('token=')) {
-      document.cookie = `token=${token}; path=/; max-age=${60 * 60 * 24}`;
+    // Check if token is expired
+    const expiryTime = parseInt(expiresAt, 10);
+    const now = Date.now();
+    if (now >= expiryTime) {
+      console.log('Token expired:', { expiryTime, now });
+      return false;
     }
+
+    // Set authorization header
+    setAuthToken(token);
+
+    // Set cookie with expiration
+    const maxAge = Math.floor((expiryTime - now) / 1000); // Convert to seconds
+    document.cookie = `token=${token}; path=/; max-age=${maxAge}`;
+
+    // Setup token renewal
+    authService.setupTokenRenewal();
 
     return true;
   },
@@ -361,7 +357,7 @@ export const authService = {
     if (!token) throw new Error('Not authenticated');
     
     api.defaults.headers.common.Authorization = `Bearer ${token}`;
-    const response = await api.post('/users/api-keys', data);
+    const response = await api.post('/v1/users/api-keys', data);
     return response.data;
   },
 
@@ -370,7 +366,7 @@ export const authService = {
     if (!token) throw new Error('Not authenticated');
     
     api.defaults.headers.common.Authorization = `Bearer ${token}`;
-    const response = await api.get('/users/api-keys');
+    const response = await api.get('/v1/users/api-keys');
     return response.data;
   },
 
@@ -379,7 +375,7 @@ export const authService = {
     if (!token) throw new Error('Not authenticated');
     
     api.defaults.headers.common.Authorization = `Bearer ${token}`;
-    await api.delete(`/users/api-keys/${id}`);
+    await api.delete(`/v1/users/api-keys/${id}`);
   },
 
   renewApiKey: async (id: number): Promise<ApiKeyResponse> => {
@@ -387,7 +383,7 @@ export const authService = {
     if (!token) throw new Error('Not authenticated');
     
     api.defaults.headers.common.Authorization = `Bearer ${token}`;
-    const response = await api.post(`/users/api-keys/${id}/renew`);
+    const response = await api.post(`/v1/users/api-keys/${id}/renew`);
     return response.data;
   },
 
