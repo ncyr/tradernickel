@@ -1,0 +1,333 @@
+{
+  "info": {
+    "name": "TraderNickel API",
+    "description": "Collection of API endpoints for the TraderNickel application",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Generate JWT Token",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/test-token",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "test-token"]
+            },
+            "description": "Generates a valid JWT token for testing purposes"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData && jsonData.token) {",
+                  "    pm.environment.set('jwtToken', jsonData.token);",
+                  "    console.log('JWT token set to environment variable: ' + jsonData.token);",
+                  "    pm.test('JWT token set to environment variable', function() {",
+                  "        pm.expect(pm.environment.get('jwtToken')).to.eql(jsonData.token);",
+                  "    });",
+                  "} else {",
+                  "    console.error('Failed to set JWT token: Token not found in response');",
+                  "    pm.test('Failed to set JWT token', function() {",
+                  "        pm.expect(jsonData).to.have.property('token');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Test JWT Verification",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/test-jwt",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "test-jwt"]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwtToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Tests JWT verification with the provided token"
+          },
+          "response": []
+        }
+      ],
+      "description": "Authentication-related endpoints"
+    },
+    {
+      "name": "User Brokers",
+      "item": [
+        {
+          "name": "Get All User Brokers",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/user-brokers",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user-brokers"]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwtToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Retrieves all user brokers"
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Broker by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/user-brokers?id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user-brokers"],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwtToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Retrieves a specific user broker by ID"
+          },
+          "response": []
+        },
+        {
+          "name": "Create User Broker",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/user-brokers",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user-brokers"]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwtToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"api_key\": \"your-api-key-here\"\n}"
+            },
+            "description": "Creates a new user broker"
+          },
+          "response": []
+        },
+        {
+          "name": "Update User Broker",
+          "request": {
+            "method": "PUT",
+            "url": {
+              "raw": "{{baseUrl}}/api/user-brokers?id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user-brokers"],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwtToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"api_key\": \"updated-api-key-here\"\n}"
+            },
+            "description": "Updates an existing user broker"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete User Broker",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/api/user-brokers?id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user-brokers"],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwtToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Deletes a user broker"
+          },
+          "response": []
+        }
+      ],
+      "description": "User broker management endpoints"
+    },
+    {
+      "name": "Test Endpoints",
+      "item": [
+        {
+          "name": "Test API Server",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/test",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "test"]
+            },
+            "description": "Tests if the API server is working"
+          },
+          "response": []
+        },
+        {
+          "name": "Simple Page Test",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/simple-page",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "simple-page"]
+            },
+            "description": "Simple endpoint for testing the API server"
+          },
+          "response": []
+        },
+        {
+          "name": "Simple Dynamic Route Test",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/simple/123",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "simple", "123"]
+            },
+            "description": "Tests dynamic routes with a simple response"
+          },
+          "response": []
+        },
+        {
+          "name": "Test ID Dynamic Route",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/test-id/123",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "test-id", "123"]
+            },
+            "description": "Tests dynamic routes with an ID parameter"
+          },
+          "response": []
+        },
+        {
+          "name": "User Brokers Query (Alternative)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/user-brokers-query?id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "user-brokers-query"],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwtToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Alternative endpoint for retrieving user brokers"
+          },
+          "response": []
+        }
+      ],
+      "description": "Test endpoints for debugging and development"
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "jwtToken",
+      "value": "",
+      "type": "string",
+      "description": "JWT token for authentication. Get this from the /api/test-token endpoint."
+    }
+  ]
+} 

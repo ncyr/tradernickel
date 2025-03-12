@@ -11,7 +11,9 @@ const isPublicRoute = (pathname: string) => {
     pathname === '/login' ||
     pathname === '/register' ||
     pathname.startsWith('/api/auth') ||
-    pathname === '/favicon.ico'
+    pathname === '/favicon.ico' ||
+    pathname.includes('.') || // Allow static files
+    pathname.startsWith('/charts') // Allow charts page
   );
 };
 
@@ -19,7 +21,7 @@ const isPublicRoute = (pathname: string) => {
 const requiresAuth = (pathname: string) => {
   return (
     pathname.startsWith('/dashboard') ||
-    (pathname.startsWith('/api') && !pathname.startsWith('/api/auth'))
+    (pathname.startsWith('/api') && !pathname.startsWith('/api/auth') && !pathname.startsWith('/api/market-data'))
   );
 };
 
@@ -57,6 +59,7 @@ export function middleware(request: NextRequest) {
     }
   }
 
+  // Allow all other routes
   return NextResponse.next();
 }
 

@@ -41,37 +41,23 @@ const BrokersPage = () => {
   useEffect(() => {
     const loadBrokers = async () => {
       try {
+        // Check authentication
         const user = await authService.getCurrentUser();
         if (!user) {
           router.push('/login');
           return;
         }
 
-        setIsAdmin(user.role === 'admin');
+        // Set admin status
+        setIsAdmin(user?.role === 'admin');
 
-        if (user.role === 'admin') {
-          const token = localStorage.getItem('token');
-          if (!token) {
-            throw new Error('Not authenticated');
-          }
-
-          const response = await fetch('/api/brokers', {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          });
-          
-          if (!response.ok) {
-            throw new Error('Failed to load brokers');
-          }
-          const data = await response.json();
-          setBrokers(data);
-        } else {
-          setError('Only administrators can access broker management');
-        }
+        // Fetch brokers using the service
+        const data = await brokerService.getBrokers();
+        setBrokers(data);
+        setError(null);
       } catch (err: any) {
         console.error('Error loading brokers:', err);
-        setError(err.message || 'Failed to load brokers');
+        setError(err.response?.data?.error || 'Failed to load brokers');
       } finally {
         setLoading(false);
       }
@@ -84,20 +70,6 @@ const BrokersPage = () => {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
         <CircularProgress />
-      </Box>
-    );
-  }
-
-  if (error && !isAdmin) {
-    return (
-      <Box sx={{ py: 4 }}>
-        <PageHeader
-          title="Broker Management"
-          subtitle="Manage trading brokers"
-        />
-        <Alert severity="error" sx={{ mt: 2 }}>
-          {error}
-        </Alert>
       </Box>
     );
   }
@@ -153,10 +125,8 @@ const BrokersPage = () => {
                   <TableRow>
                     <TableCell>Name</TableCell>
                     <TableCell>Status</TableCell>
-                    <TableCell>Demo URL</TableCell>
-                    <TableCell>Production URL</TableCell>
                     <TableCell>Created</TableCell>
-                    <TableCell align="right">Actions</TableCell>
+                    {isAdmin && <TableCell align="right">Actions</TableCell>}
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -176,28 +146,20 @@ const BrokersPage = () => {
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2" color="text.secondary">
-                          {broker.demo_url}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary">
-                          {broker.prod_url}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary">
                           {broker.created_at ? formatDate(broker.created_at) : 'N/A'}
                         </Typography>
                       </TableCell>
-                      <TableCell align="right">
-                        <IconButton
-                          color="primary"
-                          component={Link}
-                          href={`/brokers/${broker.id}`}
-                        >
-                          <EditIcon />
-                        </IconButton>
-                      </TableCell>
+                      {isAdmin && (
+                        <TableCell align="right">
+                          <IconButton
+                            color="primary"
+                            component={Link}
+                            href={`/brokers/${broker.id}`}
+                          >
+                            <EditIcon />
+                          </IconButton>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>

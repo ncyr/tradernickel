@@ -38,6 +38,8 @@ import {
   ChevronLeft as ChevronLeftIcon,
   DarkMode as DarkModeIcon,
   Key as KeyIcon,
+  ShowChart as ChartIcon,
+  Business as BrokerIcon,
 } from '@mui/icons-material';
 
 interface NavigationProps {
@@ -72,17 +74,29 @@ const Navigation = ({ variant }: NavigationProps) => {
     router.push('/login');
   };
 
+  // Add console logs to help debug navigation issues
+  const handleNavigation = (href: string | undefined) => {
+    if (!href) return;
+    console.log(`Navigation: Navigating to ${href}`);
+    router.push(href);
+  };
+
   if (loading || !user) {
     return null;
   }
 
   const navigationItems = [
     { path: '/dashboard', icon: <DashboardIcon />, label: 'Dashboard' },
-    { path: '/dashboard/bots', icon: <BotIcon />, label: 'Bots' },
-    { path: '/dashboard/schedules', icon: <ScheduleIcon />, label: 'Schedules' },
-    { path: '/dashboard/user-brokers', icon: <KeyIcon />, label: 'Broker Keys' },
-    { path: '/dashboard/settings', icon: <SettingsIcon />, label: 'Settings' },
-    { path: '/dashboard/support', icon: <SupportIcon />, label: 'Support' },
+    { path: '/bots', icon: <BotIcon />, label: 'Bots' },
+    { path: '/schedules', icon: <ScheduleIcon />, label: 'Schedules' },
+    { path: '/charts', icon: <ChartIcon />, label: 'Charts' },
+    { path: '/brokers', icon: <BrokerIcon />, label: 'Brokers' },
+    { path: '/user-brokers', icon: <KeyIcon />, label: 'Broker Integrations' },
+    { path: '/plans', icon: <KeyIcon />, label: 'Plans' },
+    { path: '/bot-plans', icon: <KeyIcon />, label: 'Bot Plans' },
+    { path: '/test-token', icon: <KeyIcon />, label: 'Test Token' },
+    { path: '/settings', icon: <SettingsIcon />, label: 'Settings' },
+    { path: '/support', icon: <SupportIcon />, label: 'Support' },
   ];
 
   const userMenuItems = [
@@ -202,7 +216,7 @@ const Navigation = ({ variant }: NavigationProps) => {
               key={item.label}
               component={item.component || (item.href ? Link : 'button')}
               href={item.href}
-              onClick={item.onClick}
+              onClick={item.href ? () => handleNavigation(item.href) : item.onClick}
               sx={{
                 gap: 1.5,
                 minWidth: 150,

@@ -1,5 +1,12 @@
 import api, { setAuthToken } from './index';
 
+// Extend Window interface to include our custom property
+declare global {
+  interface Window {
+    tokenRenewalInterval?: NodeJS.Timeout;
+  }
+}
+
 export interface LoginResponse {
   user: User;
   token: string;
@@ -207,77 +214,72 @@ export const authService = {
       if (!token) throw new Error('No token found');
 
       api.defaults.headers.common.Authorization = `Bearer ${token}`;
-      const response = await api.post('/users/renew-token');
+      const response = await api.post('/v1/auth/renew-token');
       
       // Update stored token and expiration
-      const { token: newToken, expiresAt } = response.data;
+      const { token: newToken, expiresAt, user } = response.data;
       localStorage.setItem('token', newToken);
-      localStorage.setItem('tokenExpiresAt', expiresAt.toString());
-      localStorage.setItem('user', JSON.stringify(response.data.user));
-      document.cookie = `token=${newToken}; path=/`;
+      localStorage.setItem('expiresAt', expiresAt.toString());
+      localStorage.setItem('user', JSON.stringify(user));
+
+      // Set cookie with expiration
+      const maxAge = Math.floor((expiresAt - Date.now()) / 1000); // Convert to seconds
+      document.cookie = `token=${newToken}; path=/; max-age=${maxAge}`;
       
-      api.defaults.headers.common.Authorization = `Bearer ${newToken}`;
+      // Update API client
+      setAuthToken(newToken);
+      
       return response.data;
     } catch (error: any) {
+      console.error('Token renewal failed:', error);
       if (error.response?.status === 401) {
-        authService.logout();
+        await authService.logout();
       }
       throw error;
     }
   },
 
   setupTokenRenewal: () => {
-    let intervalId: NodeJS.Timeout | null = null;
+    // Clear any existing interval
+    if (typeof window !== 'undefined' && window.tokenRenewalInterval) {
+      clearInterval(window.tokenRenewalInterval);
+    }
     
-    const renewToken = async () => {
+    const checkAndRenewToken = async () => {
       try {
         const token = localStorage.getItem('token');
-        const expiresAt = localStorage.getItem('tokenExpiresAt');
+        const expiresAt = localStorage.getItem('expiresAt');
         
         if (!token || !expiresAt) {
-          if (intervalId) {
-            clearInterval(intervalId);
-            intervalId = null;
+          console.log('No token or expiration found, clearing renewal interval');
+          if (typeof window !== 'undefined' && window.tokenRenewalInterval) {
+            clearInterval(window.tokenRenewalInterval);
+            window.tokenRenewalInterval = undefined;
           }
           return;
         }
 
-        const expiryTime = new Date(expiresAt).getTime();
-        const now = new Date().getTime();
+        const expiryTime = parseInt(expiresAt, 10);
+        const now = Date.now();
         const timeUntilExpiry = expiryTime - now;
 
-        // If token expires in less than 5 minutes, renew it
-        if (timeUntilExpiry < 5 * 60 * 1000) {
-          const response = await api.post('/auth/refresh');
-          const { token: newToken, expiresAt: newExpiresAt } = response.data;
-
-          localStorage.setItem('token', newToken);
-          localStorage.setItem('tokenExpiresAt', newExpiresAt);
-          api.defaults.headers.common.Authorization = `Bearer ${newToken}`;
+        // If token expires in less than 15 minutes, renew it
+        if (timeUntilExpiry < 15 * 60 * 1000) {
+          console.log('Token expiring soon, renewing...');
+          await authService.renewToken();
         }
       } catch (error) {
-        console.error('Token renewal failed:', error);
-        // Clear interval on error to prevent repeated failed attempts
-        if (intervalId) {
-          clearInterval(intervalId);
-          intervalId = null;
-        }
+        console.error('Error in token renewal check:', error);
       }
     };
 
-    // Initial check
-    renewToken();
-    
-    // Set up interval for subsequent checks
-    intervalId = setInterval(renewToken, 60 * 1000); // Check every minute
-
-    // Return cleanup function
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-        intervalId = null;
-      }
-    };
+    // Check token every 5 minutes
+    if (typeof window !== 'undefined') {
+      window.tokenRenewalInterval = setInterval(checkAndRenewToken, 5 * 60 * 1000);
+      
+      // Also check immediately
+      checkAndRenewToken();
+    }
   },
 
   patchUser: async (id: number, field: string, value: string | boolean): Promise<User> => {

@@ -42,17 +42,38 @@ const PlansPage = () => {
 
   const loadPlans = async () => {
     try {
-      const user = await authService.getCurrentUser();
-      if (!user) {
+      // Check if user is authenticated
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No authentication token found');
+        setError('You must be logged in to view plans');
         router.push('/login');
         return;
       }
 
-      const data = await planService.getPlans();
+      console.log('Fetching plans with token:', token.substring(0, 15) + '...');
+      
+      // Fetch plans directly from the API
+      const response = await fetch('/api/plans', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.error || response.statusText || 'Failed to load plans';
+        console.error('Error response:', response.status, errorMessage);
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      console.log('Plans loaded:', data.length);
       setPlans(data);
       setError(null);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to load plans');
+      console.error('Error loading plans:', err);
+      setError(err.message || 'Failed to load plans');
     } finally {
       setLoading(false);
       setRefreshing(false);

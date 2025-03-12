@@ -169,4 +169,164 @@ API keys can be managed in the account section under "Manage API Keys". From the
 2. View existing API keys
 3. Delete API keys when they're no longer needed
 
-Once an API key is generated, the full key is shown only once. Make sure to copy it immediately as it cannot be retrieved later. 
+Once an API key is generated, the full key is shown only once. Make sure to copy it immediately as it cannot be retrieved later.
+
+## API Documentation
+
+The application provides a RESTful API for interacting with the platform programmatically. The API endpoints are documented in the `/src/app/api/README.md` file.
+
+### API Endpoints
+
+The main API endpoints include:
+
+- User Brokers API for managing trading broker connections
+- Authentication endpoints for generating and verifying JWT tokens
+- Test endpoints for development and debugging
+
+### Postman Collection
+
+A Postman collection is available for testing the API endpoints. You can find it in the `/postman` directory at the root of the project.
+
+To use the Postman collection:
+1. Import the `TraderNickel_API_Collection.json` file into Postman
+2. Import the `TraderNickel_Local_Environment.json` environment file
+3. Select the "TraderNickel Local" environment from the dropdown
+4. Start using the collection to test the API endpoints
+
+The collection includes scripts that automatically handle authentication by setting the JWT token in your environment when you call the token generation endpoint.
+
+See the README in the `/postman` directory for more details.
+
+# TraderNickel API
+
+This repository contains the TraderNickel API, which provides endpoints for managing trading bots, orders, and broker connections.
+
+## Features
+
+- Authentication with JWT tokens
+- Bot management with different plans and configurations
+- Order creation and management
+- Broker integration
+
+## API Endpoints
+
+### Authentication
+
+- `POST /api/auth/token`: Generate a JWT token for authentication
+- `GET /api/auth/token/verify`: Verify a JWT token
+
+### Brokers
+
+- `GET /api/brokers`: Get all available brokers
+- `POST /api/brokers`: Create a new broker
+
+### User Brokers
+
+- `GET /api/user-brokers`: Get all user brokers
+- `GET /api/user-brokers/:id`: Get a specific user broker
+- `POST /api/user-brokers`: Create a new user broker
+- `PUT /api/user-brokers/:id`: Update a user broker
+- `DELETE /api/user-brokers/:id`: Delete a user broker
+
+### Bots
+
+- `GET /api/bots`: Get all bots for the authenticated user
+- `GET /api/bots/:id`: Get a specific bot
+- `POST /api/bots`: Create a new bot
+- `PUT /api/bots/:id`: Update a bot
+- `DELETE /api/bots/:id`: Delete a bot
+- `POST /api/bots/:id/token`: Regenerate a bot's token
+
+### Orders
+
+- `GET /api/orders`: Get all orders for the authenticated user
+- `GET /api/orders/:id`: Get a specific order
+- `DELETE /api/orders/:id`: Cancel an order
+- `POST /api/order/create`: Create a new order using a bot token
+
+## Bot Configuration
+
+Bots are configured with plans that define their capabilities and limitations:
+
+### Plan Configuration
+
+- `maxOrdersPerDay`: Maximum number of orders the bot can place per day
+- `maxPositionSize`: Maximum position size the bot can open
+- `allowedDirections`: Allowed trade directions (`long`, `short`)
+- `allowedSymbols`: Allowed trading symbols
+- `allowedOrderTypes`: Allowed order types
+- `defaultOrderType`: Default order type if not specified
+- `defaultQuantity`: Default quantity if not specified
+- `takeProfitTicks`: Default take profit in ticks
+- `stopLossTicks`: Default stop loss in ticks
+
+### Order Types
+
+The following order types are supported:
+
+- `Market`: Market order executed at the current market price
+- `Limit`: Limit order executed at a specified price or better
+- `Stop`: Stop order that becomes a market order when the stop price is reached
+- `StopLimit`: Stop limit order that becomes a limit order when the stop price is reached
+- `MIT`: Market If Touched order
+- `QTS`: Quote Trading System order
+- `TrailingStop`: Stop order that adjusts with market movement
+- `TrailingStopLimit`: Stop limit order that adjusts with market movement
+
+## Creating Orders with Bot Tokens
+
+To create an order using a bot token, send a POST request to `/api/order/create` with the following headers:
+
+```
+Content-Type: application/json
+X-Bot-Token: your_bot_token
+```
+
+The request body should include:
+
+```json
+{
+  "symbol": "ES",
+  "quantity": 1,
+  "price": 5000.50,
+  "direction": "long",
+  "orderType": "Market",
+  "takeProfitTicks": 8,
+  "stopLossTicks": 4,
+  "metadata": {
+    "strategy": "momentum",
+    "signal_strength": 0.85
+  }
+}
+```
+
+If `orderType`, `takeProfitTicks`, or `stopLossTicks` are not specified, the default values from the bot's plan will be used.
+
+## Validation
+
+Orders are validated against the bot's plan:
+
+1. The symbol must be in the bot's `allowedSymbols`
+2. The direction must be in the bot's `allowedDirections`
+3. The position size (quantity * price) must not exceed the bot's `maxPositionSize`
+4. The order type must be in the bot's `allowedOrderTypes`
+5. The bot must not exceed its `maxOrdersPerDay` limit
+
+## Development
+
+### Environment Variables
+
+Create a `.env.local` file with the following variables:
+
+```
+JWT_SECRET=your_jwt_secret
+```
+
+### Running the API
+
+```bash
+npm install
+npm run dev
+```
+
+The API will be available at `http://localhost:3000/api`. 

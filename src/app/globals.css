@@ -2,39 +2,112 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  /* Primary Colors */
-  --color-primary: #1a237e;
-  --color-primary-light: #534bae;
-  --color-primary-dark: #000051;
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
 
-  /* Secondary Colors */
-  --color-secondary: #2e7d32;
-  --color-secondary-light: #60ad5e;
-  --color-secondary-dark: #005005;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
 
-  /* Accent Colors */
-  --color-accent: #00838f;
-  --color-accent-light: #4fb3bf;
-  --color-accent-dark: #005662;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
 
-  /* Background Colors */
-  --color-background: #f5f7fa;
-  --color-paper: #ffffff;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
 
-  /* Text Colors */
-  --color-text-primary: #2c3e50;
-  --color-text-secondary: #546e7a;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
 
-  /* Status Colors */
-  --color-success: #4caf50;
-  --color-warning: #ffa000;
-  --color-error: #d32f2f;
-  --color-info: #00838f;
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
 
-  /* Gradients */
-  --gradient-primary: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
-  --gradient-secondary: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-secondary-light) 100%);
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --ring: 215 20.2% 65.1%;
+
+    --radius: 0.5rem;
+
+    /* Primary Colors */
+    --color-primary: #1a237e;
+    --color-primary-light: #534bae;
+    --color-primary-dark: #000051;
+
+    /* Secondary Colors */
+    --color-secondary: #2e7d32;
+    --color-secondary-light: #60ad5e;
+    --color-secondary-dark: #005005;
+
+    /* Accent Colors */
+    --color-accent: #00838f;
+    --color-accent-light: #4fb3bf;
+    --color-accent-dark: #005662;
+
+    /* Background Colors */
+    --color-background: #f5f7fa;
+    --color-paper: #ffffff;
+
+    /* Text Colors */
+    --color-text-primary: #2c3e50;
+    --color-text-secondary: #546e7a;
+
+    /* Status Colors */
+    --color-success: #4caf50;
+    --color-warning: #ffa000;
+    --color-error: #d32f2f;
+    --color-info: #00838f;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+    --gradient-secondary: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-secondary-light) 100%);
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 85.7% 97.3%;
+
+    --ring: 217.2 32.6% 17.5%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
 }
 
 /* Scrollbar Styling */
@@ -44,16 +117,16 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-background);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-primary-light);
+  background: #888;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-primary);
+  background: #555;
 }
 
 /* Selection Color */

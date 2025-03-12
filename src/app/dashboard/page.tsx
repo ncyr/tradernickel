@@ -68,61 +68,71 @@ const DashboardPage = () => {
         return;
       }
 
-      // Wrap each API call in try/catch to prevent one failure from stopping everything
-      let bots: Bot[] = [];
+      // Set default values in case API calls fail
       let activeBots = 0;
+      let activeSchedules = 0;
+      let upcomingSchedules = 0;
+      let tradeStats = {
+        total_trades: 0,
+        profit_today: 0,
+        profit_total: 0,
+      };
+
+      // Wrap each API call in try/catch to prevent one failure from stopping everything
       try {
         console.log('Fetching bots data...');
         const botsResponse = await fetch('/api/bots', {
           headers: {
             'Authorization': `Bearer ${token}`
-          }
+          },
+          // Add timeout to prevent hanging
+          signal: AbortSignal.timeout(5000)
         });
         if (!botsResponse.ok) {
           throw new Error('Failed to fetch bots');
         }
-        bots = await botsResponse.json();
-        activeBots = bots.filter(bot => bot.active).length;
+        const bots = await botsResponse.json();
+        activeBots = bots.filter((bot: Bot) => bot.active).length;
         console.log(`Fetched ${bots.length} bots, ${activeBots} active`);
       } catch (botErr) {
         console.error('Error fetching bots:', botErr);
         // Continue with other requests
       }
 
-      let schedules: Schedule[] = [];
-      let activeSchedules = 0;
-      let upcomingSchedules = 0;
       try {
         console.log('Fetching schedules data...');
         const schedulesResponse = await fetch('/api/schedules', {
           headers: {
             'Authorization': `Bearer ${token}`
-          }
+          },
+          // Add timeout to prevent hanging
+          signal: AbortSignal.timeout(5000)
         });
         if (!schedulesResponse.ok) {
           throw new Error('Failed to fetch schedules');
         }
-        schedules = await schedulesResponse.json();
-        activeSchedules = schedules.filter(schedule => schedule.active).length;
-        upcomingSchedules = schedules.filter(schedule => !schedule.active).length;
+        const schedules = await schedulesResponse.json();
+        activeSchedules = schedules.filter((schedule: Schedule) => schedule.active).length;
+        upcomingSchedules = schedules.filter((schedule: Schedule) => !schedule.active).length;
         console.log(`Fetched ${schedules.length} schedules, ${activeSchedules} active, ${upcomingSchedules} upcoming`);
       } catch (scheduleErr) {
         console.error('Error fetching schedules:', scheduleErr);
         // Continue with other requests
       }
 
-      let plans: Plan[] = [];
       try {
         console.log('Fetching plans data...');
         const plansResponse = await fetch('/api/plans', {
           headers: {
             'Authorization': `Bearer ${token}`
-          }
+          },
+          // Add timeout to prevent hanging
+          signal: AbortSignal.timeout(5000)
         });
         if (!plansResponse.ok) {
           throw new Error('Failed to fetch plans');
         }
-        plans = await plansResponse.json();
+        const plans = await plansResponse.json();
         console.log(`Fetched ${plans.length} plans`);
       } catch (planErr) {
         console.error('Error fetching plans:', planErr);
@@ -130,17 +140,14 @@ const DashboardPage = () => {
       }
 
       // Fetch trade stats
-      let tradeStats = {
-        total_trades: 0,
-        profit_today: 0,
-        profit_total: 0,
-      };
       try {
         console.log('Fetching trade stats...');
         const tradeStatsResponse = await fetch('/api/trades/stats', {
           headers: {
             'Authorization': `Bearer ${token}`
-          }
+          },
+          // Add timeout to prevent hanging
+          signal: AbortSignal.timeout(5000)
         });
         if (!tradeStatsResponse.ok) {
           throw new Error('Failed to fetch trade stats');
@@ -155,9 +162,9 @@ const DashboardPage = () => {
       // Update stats with real data
       setStats({
         activeBots,
-        totalTrades: tradeStats.total_trades,
-        profitToday: tradeStats.profit_today,
-        profitTotal: tradeStats.profit_total,
+        totalTrades: tradeStats.total_trades || 0,
+        profitToday: tradeStats.profit_today || 0,
+        profitTotal: tradeStats.profit_total || 0,
         activeSchedules,
         upcomingSchedules,
       });
@@ -192,13 +199,18 @@ const DashboardPage = () => {
         }
         
         // Then verify with the auth service
-        const user = await authService.getCurrentUser();
-        console.log('Dashboard: Current user:', user);
-        
-        if (!user) {
-          console.log('Dashboard: No user found, redirecting to login');
-          window.location.href = '/login';
-          return;
+        try {
+          const user = await authService.getCurrentUser();
+          console.log('Dashboard: Current user:', user);
+          
+          if (!user) {
+            console.log('Dashboard: No user found, redirecting to login');
+            window.location.href = '/login';
+            return;
+          }
+        } catch (userErr) {
+          console.error('Dashboard: Error getting current user:', userErr);
+          // Continue loading dashboard even if getCurrentUser fails
         }
         
         if (isMounted) {
@@ -215,16 +227,26 @@ const DashboardPage = () => {
         console.error('Dashboard: Error in authentication check:', err);
         if (isMounted) {
           setError('Authentication error. Please log in again.');
-          window.location.href = '/login';
+          // Don't redirect immediately, allow user to see the error
           setLoading(false);
         }
       }
     };
 
+    // Set a timeout to ensure we don't hang indefinitely
+    const authTimeout = setTimeout(() => {
+      if (loading && isMounted) {
+        console.log('Dashboard: Authentication check timed out');
+        setLoading(false);
+        setError('Authentication check timed out. Please refresh the page.');
+      }
+    }, 10000);
+
     checkAuth();
     
     return () => {
       isMounted = false;
+      clearTimeout(authTimeout);
     };
   }, []);
 

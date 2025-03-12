@@ -106,25 +106,38 @@ const ScheduleDetailPage = () => {
     const loadData = async () => {
       try {
         setLoading(true);
-        const [scheduleData, botPlansData] = await Promise.all([
-          id !== 'new' ? scheduleService.getSchedule(id) : null,
-          botPlanService.getBotPlansWithNames(),
-        ]);
-
-        if (scheduleData) {
-          setValues({
-            weekday: scheduleData.weekday,
-            start_at: scheduleData.start_at,
-            end_at: scheduleData.end_at,
-            bot_plan_id: scheduleData.bot_plan_id.toString(),
-          });
+        
+        // Load schedule data if editing an existing schedule
+        let scheduleData = null;
+        if (id !== 'new') {
+          try {
+            scheduleData = await scheduleService.getSchedule(id);
+            console.log('Loaded schedule data:', scheduleData);
+          } catch (err: any) {
+            console.error('Error loading schedule:', err);
+            setError(`Failed to load schedule: ${err.message}`);
+          }
         }
 
-        setBotPlans(botPlansData);
-        setError(null);
-      } catch (err: any) {
-        console.error('Error loading data:', err);
-        setError(err.response?.data?.error || 'Failed to load data');
+        // Load bot plans data
+        try {
+          console.log('Fetching bot plans with names...');
+          const botPlansData = await botPlanService.getBotPlansWithNames();
+          console.log('Loaded bot plans:', botPlansData);
+          setBotPlans(botPlansData);
+          
+          if (scheduleData) {
+            setValues({
+              weekday: scheduleData.weekday,
+              start_at: scheduleData.start_at,
+              end_at: scheduleData.end_at,
+              bot_plan_id: scheduleData.bot_plan_id.toString(),
+            });
+          }
+        } catch (err: any) {
+          console.error('Error loading bot plans:', err);
+          setError(`Failed to load bot plans: ${err.message}`);
+        }
       } finally {
         setLoading(false);
       }
@@ -265,12 +278,29 @@ const ScheduleDetailPage = () => {
                   touched={touched.bot_plan_id}
                   fullWidth
                 >
-                  {botPlans.map((plan) => (
-                    <MenuItem key={plan.id} value={plan.id.toString()}>
-                      {plan.bot_name} - {plan.plan_name}
+                  {botPlans.length > 0 ? (
+                    botPlans.map((plan) => (
+                      <MenuItem key={plan.id} value={plan.id.toString()}>
+                        {plan.bot_name || 'Unknown Bot'} - {plan.plan_name || 'Unknown Plan'}
+                      </MenuItem>
+                    ))
+                  ) : (
+                    <MenuItem disabled value="">
+                      No bot plans available. Please create a bot plan first.
                     </MenuItem>
-                  ))}
+                  )}
                 </FormInput>
+                {botPlans.length === 0 && (
+                  <Box sx={{ mt: 2 }}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => router.push('/bot-plans/new')}
+                    >
+                      Create Bot Plan
+                    </Button>
+                  </Box>
+                )}
               </Grid>
 
               <Grid item xs={12} md={6}>

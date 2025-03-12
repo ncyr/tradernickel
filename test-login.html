@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Login</title>
+    <script>
+        async function testLogin() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch('http://localhost:5001/v1/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</head>
+<body>
+    <h1>Test Login</h1>
+    <div>
+        <label for="username">Username:</label>
+        <input type="text" id="username" value="testuser">
+    </div>
+    <div>
+        <label for="password">Password:</label>
+        <input type="password" id="password" value="testpassword">
+    </div>
+    <div>
+        <button onclick="testLogin()">Login</button>
+    </div>
+    <div>
+        <h2>Result:</h2>
+        <pre id="result"></pre>
+    </div>
+</body>
+</html> 
